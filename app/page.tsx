@@ -26,8 +26,8 @@ export default function HomePage() {
             <p className="mt-6 max-w-xl text-lg leading-8 text-white/85">
               {brand.legalName} helps organizations plan, build, and run
               technical programs with the same discipline we bring to project
-              management — from architecture to go-live, and from Gantt to
-              lobby screens.
+              management and logistics — from architecture to go-live, from
+              warehouse to last-mile, and from Gantt to lobby screens.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
@@ -52,7 +52,7 @@ export default function HomePage() {
           {[
             ["Technical solutions", "Architecture, systems, and implementation that hold under pressure."],
             ["Project management", "Governance, schedules, and accountable delivery from kickoff to close."],
-            ["Slidify", "Play images, videos, and URLs on any screen — a Rio Optima product."],
+            ["Logistics", "Freight, warehousing, inventory, and last-mile operations on one cadence."],
           ].map(([title, copy]) => (
             <div key={title} className="border-l-2 border-gold pl-4">
               <h2 className="font-display text-lg font-bold">{title}</h2>
@@ -143,36 +143,50 @@ export default function HomePage() {
                 </p>
               </div>
             </article>
-            <article className="overflow-hidden border-2 border-gold bg-white">
+            <article className="overflow-hidden border border-navy/10 bg-paper">
               <div className="relative h-52">
                 <Image
-                  src="/images/slidify-signage.png"
-                  alt="Digital signage display in a corporate lobby"
+                  src="/images/logistics-warehouse.png"
+                  alt="Warehouse operations and inventory movement"
                   fill
                   className="object-cover"
                 />
               </div>
               <div className="p-6">
-                <p className="text-[11px] font-bold tracking-[0.22em] text-gold uppercase">
-                  Featured product
-                </p>
-                <h3 className="font-display mt-1 text-xl font-bold text-navy">
-                  Slidify
+                <h3 className="font-display text-xl font-bold text-navy">
+                  Logistics
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Image and video display for screens and playlists. Manage
-                  media, then open the fullscreen player on any lobby or
-                  operations display.
+                  Freight, warehousing, supply chain visibility, and last-mile
+                  coordination for operators who need the network to move.
                 </p>
-                <Link
-                  href="/slidify"
-                  className="mt-4 inline-flex rounded-[5px] bg-gold px-4 py-2 text-xs font-bold tracking-wide text-navy uppercase"
-                >
-                  Launch Slidify
-                </Link>
               </div>
             </article>
           </div>
+        </div>
+      </section>
+
+      <section className="relative isolate overflow-hidden bg-navy py-16 text-white">
+        <div className="site-container relative flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+          <div>
+            <p className="text-xs font-bold tracking-[0.28em] text-gold uppercase">
+              SLIDER
+            </p>
+            <h2 className="font-display mt-2 text-3xl font-extrabold">
+              Put images, video, and live pages on any screen.
+            </h2>
+            <p className="mt-2 max-w-xl text-white/85">
+              SLIDER loops a playlist on lobby, warehouse, and operations
+              displays. Open the app to see how it works — log in to manage
+              the playlist.
+            </p>
+          </div>
+          <Link
+            href="/slider"
+            className="rounded-[5px] bg-gold px-6 py-3 text-sm font-bold text-navy uppercase"
+          >
+            Open SLIDER
+          </Link>
         </div>
       </section>
 

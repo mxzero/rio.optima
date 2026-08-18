@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { MediaType, Orientation, Slide, youtubeIdFromUrl } from "@/lib/slidify";
+import { MediaType, Orientation, Slide, youtubeIdFromUrl } from "@/lib/slider";
 
 type Props = {
   slide?: Slide | null;
@@ -148,7 +148,7 @@ export default function MediaForm({ slide, onSave, cancelHref }: Props) {
       {mediaType === "video" ? (
         <div className="space-y-3">
           <p className="border border-gold/40 bg-gold/10 p-3 text-sm text-navy">
-            <strong>Upload the video to YouTube first.</strong> Paste a watch or share URL. Slidify hosts the slider, not the video.
+            <strong>Upload the video to YouTube first.</strong> Paste a watch or share URL. SLIDER hosts the player, not the video.
           </p>
           <label className="grid gap-1.5 text-sm font-semibold text-navy">
             YouTube video URL *

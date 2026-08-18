@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     template: `%s | ${brand.legalName}`,
   },
   description:
-    "RIO OPTIMA INC. provides technical and project management solutions, including Slidify digital signage for screens and playlists.",
+    "RIO OPTIMA INC. provides technical, project management, and logistics solutions, including SLIDER digital signage for screens and playlists.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

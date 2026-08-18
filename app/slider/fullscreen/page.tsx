@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import Player, { PlayerSlide } from "@/components/slidify/Player";
-import { activePlayerSlides, loadSlides } from "@/lib/slidify";
+import Player, { PlayerSlide } from "@/components/slider/Player";
+import { activePlayerSlides, loadSlides } from "@/lib/slider";
 
 export default function FullscreenPage() {
   const [slides, setSlides] = useState<PlayerSlide[]>([]);
@@ -15,9 +15,9 @@ export default function FullscreenPage() {
   return (
     <div className="fixed inset-0 z-[80] bg-black">
       <Link
-        href="/slidify"
-        title="Back to Slidify"
-        aria-label="Back to Slidify"
+        href="/slider"
+        title="Back to SLIDER"
+        aria-label="Back to SLIDER"
         className="absolute top-2.5 left-2.5 z-20 grid h-[30px] w-[30px] place-items-center rounded-[5px] bg-gold text-navy"
       >
         <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">

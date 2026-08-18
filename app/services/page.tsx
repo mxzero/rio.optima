@@ -7,7 +7,18 @@ export const metadata: Metadata = {
   title: "Services",
 };
 
-const services = [
+type Service = {
+  title: string;
+  image: string;
+  alt: string;
+  items: string[];
+  purpose?: string;
+  href?: string;
+  cta?: string;
+  featured?: boolean;
+};
+
+const services: Service[] = [
   {
     title: "Technical solutions",
     image: "/images/technical-architecture.png",
@@ -30,6 +41,56 @@ const services = [
       "Recovery of programs that have drifted",
     ],
   },
+  {
+    title: "Freight and distribution",
+    image: "/images/logistics-freight.png",
+    alt: "Freight trucks at a distribution center",
+    items: [
+      "Inbound and outbound freight planning",
+      "Carrier coordination and lane performance",
+      "Distribution network design",
+      "Exception handling across the move",
+    ],
+  },
+  {
+    title: "Warehouse operations",
+    image: "/images/logistics-warehouse.png",
+    alt: "Warehouse racking and pallet movement",
+    items: [
+      "Receiving, put-away, and inventory control",
+      "Slotting, pick-pack, and dispatch cadence",
+      "Yard and dock management",
+      "Safety, layout, and throughput improvement",
+    ],
+  },
+  {
+    title: "Supply chain and last-mile",
+    image: "/images/logistics-supply-chain.png",
+    alt: "Supply chain control room with shipment maps",
+    purpose:
+      "Keep freight, inventory, and last-mile routing visible as one operating picture.",
+    items: [
+      "End-to-end supply chain visibility",
+      "Last-mile routing and fleet coordination",
+      "Inventory positioning and replenishment",
+      "Control-tower reporting for logistics operations",
+    ],
+  },
+  {
+    title: "SLIDER",
+    image: "/images/slidify-signage.png",
+    alt: "SLIDER digital signage on a lobby display",
+    purpose:
+      "SLIDER is Rio Optima’s screen application. It loops a playlist of images, YouTube videos, and web pages on lobby, warehouse, and operations displays so status and messaging stay visible without a dedicated operator.",
+    items: [
+      "Playlist of images, YouTube videos, and live pages",
+      "Fullscreen player for TVs and public screens",
+      "Simple manage view after you log in",
+    ],
+    href: "/slider",
+    cta: "Open SLIDER",
+    featured: true,
+  },
 ];
 
 export default function ServicesPage() {
@@ -38,16 +99,20 @@ export default function ServicesPage() {
       <PageHero
         eyebrow="What we do"
         title="Services that move work from intent to operation."
-        copy="Technical solutions and project management are the core of the practice. Slidify is our in-house application for screens, playlists, and public displays."
-        image="/images/project-delivery.png"
-        imageAlt="Project delivery session in a boardroom"
+        copy="Technical solutions and project management sit beside logistics: freight, warehousing, and supply chain. SLIDER is our in-house application for screens, playlists, and public displays."
+        image="/images/logistics-freight.png"
+        imageAlt="Distribution center and freight operations"
       />
 
       <section className="site-container grid gap-10 py-20">
         {services.map((service) => (
           <article
             key={service.title}
-            className="grid overflow-hidden border border-navy/10 bg-white md:grid-cols-2"
+            className={`grid overflow-hidden md:grid-cols-2 ${
+              service.featured
+                ? "border-2 border-gold bg-white"
+                : "border border-navy/10 bg-white"
+            }`}
           >
             <div className="relative min-h-[260px]">
               <Image
@@ -62,55 +127,25 @@ export default function ServicesPage() {
                 {service.title}
               </h2>
               <hr className="gold-rule mt-4" />
+              {service.purpose ? (
+                <p className="mt-4 leading-7 text-muted">{service.purpose}</p>
+              ) : null}
               <ul className="mt-5 space-y-2 text-muted">
                 {service.items.map((item) => (
                   <li key={item}>— {item}</li>
                 ))}
               </ul>
+              {service.href ? (
+                <Link
+                  href={service.href}
+                  className="mt-6 inline-flex rounded-[5px] bg-gold px-5 py-2.5 text-sm font-bold text-navy uppercase"
+                >
+                  {service.cta}
+                </Link>
+              ) : null}
             </div>
           </article>
         ))}
-      </section>
-
-      <section className="bg-navy py-16 text-white">
-        <div className="site-container grid items-center gap-10 md:grid-cols-2">
-          <div>
-            <p className="text-xs font-bold tracking-[0.28em] text-gold uppercase">
-              Featured application
-            </p>
-            <h2 className="font-display mt-3 text-4xl font-extrabold">
-              Slidify
-            </h2>
-            <p className="mt-4 leading-7 text-white/80">
-              Play images, YouTube videos, and web pages on any screen.
-              Subscribe, manage a playlist, and open the fullscreen player on
-              a lobby, command center, or shop-floor display. Slidify hosts
-              the slider — video files stay on YouTube.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                href="/slidify"
-                className="rounded-[5px] bg-gold px-5 py-2.5 text-sm font-bold text-navy uppercase"
-              >
-                Open Slidify
-              </Link>
-              <Link
-                href="/contact?product=slidify"
-                className="rounded-[5px] border border-white/30 px-5 py-2.5 text-sm font-bold uppercase hover:border-gold hover:text-gold"
-              >
-                Request access
-              </Link>
-            </div>
-          </div>
-          <div className="relative aspect-video overflow-hidden">
-            <Image
-              src="/images/slidify-signage.png"
-              alt="Slidify running on a lobby display"
-              fill
-              className="object-cover"
-            />
-          </div>
-        </div>
       </section>
     </>
   );

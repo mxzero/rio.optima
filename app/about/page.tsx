@@ -13,7 +13,7 @@ export default function AboutPage() {
       <PageHero
         eyebrow="About us"
         title="Built for the work that has to land."
-        copy="RIO OPTIMA INC. is a business solutions company. We provide technical and project management solutions for teams that cannot afford ambiguity — in the design, in the schedule, or in the room."
+        copy="RIO OPTIMA INC. is a business solutions company. We provide technical, project management, and logistics solutions for teams that cannot afford ambiguity — in the design, in the warehouse, or in the schedule."
         image="/images/about-leadership.png"
         imageAlt="Leadership team in a modern office atrium"
       />
@@ -32,9 +32,9 @@ export default function AboutPage() {
             disciplines sit in one room.
           </p>
           <p className="mt-4 leading-7 text-muted">
-            Our people come from engineering, architecture, operations, and
-            PMO backgrounds. We work with private enterprises, public
-            programs, and growing firms that need an external backbone
+            Our people come from engineering, architecture, operations,
+            logistics, and PMO backgrounds. We work with private enterprises,
+            public programs, and growing firms that need an external backbone
             without losing ownership of the result.
           </p>
         </div>
@@ -53,7 +53,7 @@ export default function AboutPage() {
           {[
             ["Technical depth", "We can sit with architects, developers, and operators and talk about the system, not just the status report."],
             ["Delivery discipline", "Scope, schedule, risk, and decision logs are treated as operating tools — not paperwork after the meeting."],
-            ["Product thinking", "Where a capability should live as software, we build it. Slidify is our first in-house application for screens and playlists."],
+            ["Logistics fluency", "Freight, warehousing, inventory, and last-mile are planned as one network, not three afterthoughts."],
           ].map(([title, copy]) => (
             <article key={title} className="border-t-4 border-teal bg-paper p-6">
               <h3 className="font-display text-xl font-bold text-navy">{title}</h3>

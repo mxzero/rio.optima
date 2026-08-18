@@ -12,12 +12,12 @@ export default function SiteFooter() {
             alt="RIO OPTIMA INC."
             width={240}
             height={62}
-            className="mb-5 h-12 w-auto rounded-sm bg-white p-1.5"
+            className="mb-5 h-12 w-auto bg-white p-1.5"
           />
           <p className="max-w-md text-sm leading-6 text-white/75">
-            {brand.legalName} provides technical and project management
-            solutions for organizations that need clear delivery, reliable
-            systems, and accountable partners.
+            {brand.legalName} provides technical, project management, and
+            logistics solutions for organizations that need clear delivery,
+            reliable systems, and accountable partners.
           </p>
         </div>
         <div>
@@ -41,8 +41,13 @@ export default function SiteFooter() {
               </Link>
             </li>
             <li>
-              <Link href="/slidify" className="hover:text-gold">
-                Slidify
+              <Link href="/slider" className="hover:text-gold">
+                SLIDER
+              </Link>
+            </li>
+            <li>
+              <Link href="/login" className="hover:text-gold">
+                Log in
               </Link>
             </li>
             <li>

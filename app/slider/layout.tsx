@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Slidify",
+  title: "SLIDER",
   description:
-    "Slidify by RIO OPTIMA INC. Play images, YouTube videos, and URLs on any screen.",
+    "SLIDER by RIO OPTIMA INC. Play images, YouTube videos, and URLs on any screen.",
 };
 
-export default function SlidifyLayout({
+export default function SliderLayout({
   children,
 }: {
   children: React.ReactNode;

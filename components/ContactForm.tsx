@@ -1,19 +1,11 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { brand } from "@/lib/brand";
 
 export default function ContactForm() {
-  const searchParams = useSearchParams();
-  const defaultProduct = searchParams.get("product") === "slidify" ? "Slidify" : "";
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
-
-  const subjectHint = useMemo(
-    () => (defaultProduct ? `Inquiry: ${defaultProduct}` : "Inquiry"),
-    [defaultProduct],
-  );
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,15 +75,14 @@ export default function ContactForm() {
       </div>
       <label className="grid gap-1.5 text-sm font-semibold text-navy">
         Interest
-        <select
-          name="interest"
-          defaultValue={defaultProduct}
-          className="rounded-[5px] border border-navy/20 px-3 py-2.5 font-normal text-ink"
-        >
+        <select name="interest" className="rounded-[5px] border border-navy/20 px-3 py-2.5 font-normal text-ink">
           <option value="">Select a service</option>
           <option>Technical solutions</option>
           <option>Project management</option>
-          <option>Slidify</option>
+          <option>Freight and distribution</option>
+          <option>Warehouse operations</option>
+          <option>Supply chain and last-mile</option>
+          <option>SLIDER</option>
           <option>Other</option>
         </select>
       </label>
@@ -101,7 +92,7 @@ export default function ContactForm() {
           required
           name="message"
           rows={5}
-          placeholder={`${subjectHint} — tell us about the program, timeline, and outcome you need.`}
+          placeholder="Tell us about the program, timeline, logistics network, and outcome you need."
           className="rounded-[5px] border border-navy/20 px-3 py-2.5 font-normal text-ink"
         />
       </label>

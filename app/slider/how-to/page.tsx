@@ -1,25 +1,25 @@
 import type { Metadata } from "next";
-import SlidifyNav from "@/components/slidify/SlidifyNav";
+import SliderNav from "@/components/slider/SliderNav";
 
 export const metadata: Metadata = {
-  title: "Slidify — How to",
+  title: "SLIDER — How to",
 };
 
-export default function SlidifyHowToPage() {
+export default function SliderHowToPage() {
   return (
     <div>
-      <SlidifyNav />
+      <SliderNav />
       <section className="site-container py-10">
         <p className="text-xs font-bold tracking-[0.28em] text-gold uppercase">How to</p>
-        <h1 className="font-display mt-2 text-4xl font-extrabold text-navy">Use Slidify</h1>
+        <h1 className="font-display mt-2 text-4xl font-extrabold text-navy">Use SLIDER</h1>
         <p className="mt-3 max-w-2xl text-muted">
-          Slidify plays a playlist of images, YouTube videos, and web pages. You manage the playlist; the fullscreen player loops it.
+          SLIDER plays a playlist of images, YouTube videos, and web pages. You manage the playlist; the fullscreen player loops it.
         </p>
         <div className="mt-8 max-w-3xl space-y-6 border border-navy/10 bg-white p-6">
           <div>
-            <h2 className="font-display text-xl font-bold text-navy">1. Request access and open the app</h2>
+            <h2 className="font-display text-xl font-bold text-navy">1. Log in and open the app</h2>
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted">
-              <li>Request Slidify from Contact Us, then open Manage to add media.</li>
+              <li>Log in as Admin, then open Manage to add media.</li>
               <li>Open Fullscreen on the TV or lobby screen.</li>
             </ol>
           </div>
@@ -28,7 +28,7 @@ export default function SlidifyHowToPage() {
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted">
               <li>Click New media.</li>
               <li>For a photo, upload an image file. Keep files reasonably small so screens refresh quickly.</li>
-              <li>For a video, paste a YouTube watch or share URL. Slidify does not host video files.</li>
+              <li>For a video, paste a YouTube watch or share URL. SLIDER does not host video files.</li>
               <li>For a web page, set the type to URL and paste an https link.</li>
               <li>Set duration so each slide is readable. Turn Active off to keep an item without playing it.</li>
             </ol>

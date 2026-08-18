@@ -1,6 +1,6 @@
 # RIO OPTIMA INC.
 
-Business solutions website for technical and project management work, including the **Slidify** application for screens and playlists.
+Business solutions website for technical, project management, and logistics work, including the **SLIDER** application for screens and playlists.
 
 ## Pages
 
@@ -9,7 +9,8 @@ Business solutions website for technical and project management work, including 
 - Vision & Mission
 - Services
 - Contact Us
-- Slidify (`/slidify`, `/slidify/manage`, `/slidify/fullscreen`)
+- Log in
+- SLIDER (`/slider` overview when signed out, manage view when signed in)
 
 Contact details on the site (domain, email, phone, address) are placeholders.
 
@@ -22,4 +23,5 @@ npm run dev
 
 ## Deploy
 
-Push to GitHub and import the `rio.optima` repository in Vercel, or run `npx vercel`.
+- GitHub: https://github.com/mxzero/rio.optima
+- Production: https://rio-optima.vercel.app

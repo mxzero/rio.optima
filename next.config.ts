@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async redirects() {
+    return [
+      { source: "/slidify", destination: "/slider", permanent: false },
+      { source: "/slidify/:path*", destination: "/slider/:path*", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

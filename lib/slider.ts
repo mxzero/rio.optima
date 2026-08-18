@@ -14,7 +14,7 @@ export type Slide = {
   isActive: boolean;
 };
 
-const STORAGE_KEY = "rio-optima-slidify";
+const STORAGE_KEY = "rio-optima-slider";
 
 export const demoSlides: Slide[] = [
   {

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import ContactForm from "@/components/ContactForm";
 import PageHero from "@/components/PageHero";
 import { brand } from "@/lib/brand";
@@ -45,8 +44,8 @@ export default function ContactPage() {
                 </a>
               </dd>
               <dd>
-                <a className="hover:text-gold" href={`mailto:${brand.emails.slidify}`}>
-                  {brand.emails.slidify}
+                <a className="hover:text-gold" href={`mailto:${brand.emails.logistics}`}>
+                  {brand.emails.logistics}
                 </a>
               </dd>
             </div>
@@ -71,9 +70,7 @@ export default function ContactPage() {
             </div>
           </dl>
         </aside>
-        <Suspense fallback={<div className="bg-white p-8 text-muted">Loading form…</div>}>
           <ContactForm />
-        </Suspense>
       </section>
     </>
   );
