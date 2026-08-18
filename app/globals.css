@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  --navy: #002147;
+  --teal: #007481;
+  --gold: #e5a024;
+  --paper: #f9f9f9;
+  --ink: #12304a;
+  --muted: #5b6f7d;
+}
+
+@theme inline {
+  --color-navy: #002147;
+  --color-teal: #007481;
+  --color-gold: #e5a024;
+  --color-paper: #f9f9f9;
+  --color-ink: #12304a;
+  --color-muted: #5b6f7d;
+  --font-sans: var(--font-source-sans);
+  --font-display: var(--font-montserrat);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-source-sans), "Segoe UI", sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: var(--font-montserrat), "Segoe UI", sans-serif;
+}
+
+::selection {
+  background: #007481;
+  color: white;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+.site-container {
+  width: min(1180px, calc(100% - 2.5rem));
+  margin-inline: auto;
+}
+
+.gold-rule {
+  width: 4.5rem;
+  height: 3px;
+  background: var(--gold);
+  border: 0;
+}
