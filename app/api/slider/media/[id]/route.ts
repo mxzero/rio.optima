@@ -1,15 +1,27 @@
 import { Readable } from "node:stream";
 import { errorResponse } from "@/lib/server/http";
+import { NextResponse } from "next/server";
+import { SessionUser } from "@/lib/auth";
 import { requireUser } from "@/lib/server/session";
-import { openMediaFor } from "@/lib/server/slides";
+import { findPlayerOwner, openMediaFor } from "@/lib/server/slides";
 
-// Sends an uploaded file the user may see: a redirect to a short-lived signed
+// Sends an uploaded file the viewer may see: a redirect to a short-lived signed
 // Blob URL, or a local file stream with Range support so videos can seek.
+// Public player links pass ?player=<key> instead of a login; the file must be
+// in that (active) user's playlist.
 export async function GET(request: Request, ctx: RouteContext<"/api/slider/media/[id]">) {
-  const { user, denied } = await requireUser("slider");
-  if (denied) return denied;
+  const key = new URL(request.url).searchParams.get("player");
+  let viewer: SessionUser | null;
+  if (key) {
+    viewer = await findPlayerOwner(key);
+    if (!viewer) return NextResponse.json({ error: "Media not found." }, { status: 404 });
+  } else {
+    const { user, denied } = await requireUser("slider");
+    if (denied) return denied;
+    viewer = user;
+  }
   try {
-    const media = await openMediaFor(user, (await ctx.params).id);
+    const media = await openMediaFor(viewer, (await ctx.params).id);
     if ("redirect" in media) {
       return new Response(null, { status: 302, headers: { Location: media.redirect, "Cache-Control": "private, no-store" } });
     }

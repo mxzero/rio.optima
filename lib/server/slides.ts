@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { SessionUser, isAdmin } from "@/lib/auth";
+import { SessionUser, canUseSlider, isAdmin, parsePlayerKey } from "@/lib/auth";
 import {
   DirectUpload,
   MediaError,
@@ -11,7 +11,7 @@ import {
   saveDirectUpload,
 } from "@/lib/server/media";
 import { collection } from "@/lib/server/store";
-import { listUsers } from "@/lib/server/users";
+import { findUserById, findUserByShortId, listUsers } from "@/lib/server/users";
 import { MediaType, Slide, demoSlides, uploadedMediaId, uploadedMediaRef, youtubeIdFromUrl } from "@/lib/slider";
 
 type StoredSlide = Slide & { createdAt: string; media?: MediaLocation };
@@ -47,6 +47,14 @@ async function findVisible(user: SessionUser, id: string) {
   const slide = await slides.get(id);
   if (!slide || !visibleTo(user, slide)) throw new MediaError("Media not found.", 404);
   return slide;
+}
+
+// The user behind a public player link, if that account may play SLIDER:
+// it exists, is active, and has the Slider service (or is an admin).
+export async function findPlayerOwner(key: string) {
+  const parsed = parsePlayerKey(key);
+  const user = !parsed ? null : "shortId" in parsed ? await findUserByShortId(parsed.shortId) : await findUserById(parsed.id);
+  return canUseSlider(user) ? user : null;
 }
 
 // Admins see every slide; everyone else only their own.

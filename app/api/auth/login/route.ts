@@ -15,6 +15,9 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Invalid email or password." }, { status: 401 });
   }
+  if (!user.active) {
+    return NextResponse.json({ ok: false, error: "You do not have an active account." }, { status: 403 });
+  }
 
   const response = NextResponse.json({ ok: true, user });
   let token: string;

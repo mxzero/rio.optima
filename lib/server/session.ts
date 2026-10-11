@@ -57,7 +57,9 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   if (!token) return null;
   try {
     const userId = await readSessionToken(token);
-    return userId ? await findUserById(userId) : null;
+    const user = userId ? await findUserById(userId) : null;
+    // Deactivating an account signs it out everywhere.
+    return user?.active ? user : null;
   } catch (error) {
     // Storage not configured yet: treat as signed out; login explains why.
     if (error instanceof SetupError) return null;

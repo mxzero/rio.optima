@@ -82,13 +82,15 @@ export default function AdminPage() {
       <div>
         <h2 className="font-display text-xl font-bold text-navy">Users</h2>
         <div className="mt-3 overflow-x-auto border border-navy/10 bg-white">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[1040px] text-left text-sm">
             <thead className="bg-navy text-white">
               <tr>
                 <th className="px-3 py-3 font-semibold">Name</th>
+                <th className="px-3 py-3 font-semibold">ID</th>
                 <th className="px-3 py-3 font-semibold">Email</th>
                 <th className="px-3 py-3 font-semibold">Role</th>
                 <th className="px-3 py-3 font-semibold">Service</th>
+                <th className="px-3 py-3 font-semibold">Active</th>
                 <th className="px-3 py-3 font-semibold">Media</th>
                 <th className="px-3 py-3 font-semibold">Added</th>
                 <th className="px-3 py-3 font-semibold">Actions</th>
@@ -97,7 +99,7 @@ export default function AdminPage() {
             <tbody>
               {users === null ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-muted">
+                  <td colSpan={9} className="px-3 py-8 text-center text-muted">
                     Loading…
                   </td>
                 </tr>
@@ -140,6 +142,7 @@ function AddUserForm({ onAdded, onError }: { onAdded: (user: SessionUser) => voi
           password: form.get("password"),
           role: form.get("role"),
           service: form.get("service"),
+          active: form.get("active") === "yes",
         }),
       );
       formElement.reset();
@@ -188,7 +191,14 @@ function AddUserForm({ onAdded, onError }: { onAdded: (user: SessionUser) => voi
             ))}
           </select>
         </label>
-        <div className="flex self-end">
+        <label className="grid gap-1.5 text-sm font-semibold text-navy">
+          Active *
+          <select name="active" defaultValue="yes" className={inputClass}>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+        <div className="flex self-end md:col-span-2">
           <button
             type="submit"
             disabled={busy}
@@ -199,6 +209,7 @@ function AddUserForm({ onAdded, onError }: { onAdded: (user: SessionUser) => voi
         </div>
       </div>
       <p className="text-xs text-muted">
+        <strong className="text-navy">Active: No</strong> blocks login and the user&apos;s public player link.{" "}
         <strong className="text-navy">Admin</strong>: admin console, manages users, sees all uploaded media.{" "}
         <strong className="text-navy">Subscriber</strong>: manages only their own media.
       </p>
@@ -221,7 +232,10 @@ function UserRow({
   const [settingPassword, setSettingPassword] = useState(false);
   const [password, setPassword] = useState("");
 
-  async function patch(body: Partial<{ role: Role; service: Service; password: string }>, message: string) {
+  async function patch(
+    body: Partial<{ role: Role; service: Service; password: string; active: boolean }>,
+    message: string,
+  ) {
     setBusy(true);
     try {
       await call(`/api/admin/users/${user.id}`, json("PATCH", body));
@@ -257,6 +271,7 @@ function UserRow({
         {user.name}
         {isMe ? <span className="ml-1 text-xs text-muted">(you)</span> : null}
       </td>
+      <td className="px-3 py-3 font-mono text-xs whitespace-nowrap text-navy">{user.shortId}</td>
       <td className="px-3 py-3">{user.email}</td>
       <td className="px-3 py-3">
         <select
@@ -294,6 +309,22 @@ function UserRow({
               {service.label}
             </option>
           ))}
+        </select>
+      </td>
+      <td className="px-3 py-3">
+        <select
+          aria-label={`Active for ${user.name}`}
+          value={user.active ? "yes" : "no"}
+          disabled={busy || isMe}
+          title={isMe ? "You can't deactivate your own account." : undefined}
+          onChange={(event) => {
+            const active = event.target.value === "yes";
+            patch({ active }, `${user.name} is now ${active ? "active" : "inactive"}.`);
+          }}
+          className={`rounded-[5px] border px-2 py-1 ${user.active ? "border-navy/20" : "border-red-300 bg-red-50 text-red-800"}`}
+        >
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
         </select>
       </td>
       <td className="px-3 py-3">{user.mediaCount}</td>

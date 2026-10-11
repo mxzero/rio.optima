@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import PlayerLink from "@/components/slider/PlayerLink";
 import { Slide, isUploadedMedia, mediaLabel } from "@/lib/slider";
 import { fetchSlides, removeSlide } from "@/lib/sliderApi";
 
@@ -42,6 +43,7 @@ export default function ManageMedia() {
           New media
         </Link>
       </div>
+      <PlayerLink />
       {error ? (
         <p role="alert" className="mt-4 border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           {error}
@@ -120,7 +122,8 @@ export default function ManageMedia() {
           </li>
         </ul>
         <p className="mt-3">
-          Fullscreen plays every active item in this list. Sign in on the display screen with the same account.
+          On a display screen, open your player link above. It plays every active item in this list with no login, and
+          checks for changes every 5 minutes.
         </p>
       </div>
     </section>
