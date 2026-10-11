@@ -81,9 +81,9 @@ const services: Service[] = [
     image: "/images/slidify-signage.png",
     alt: "SLIDER digital signage on a lobby display",
     purpose:
-      "SLIDER is Rio Optima’s screen application. It loops a playlist of images, YouTube videos, and web pages on lobby, warehouse, and operations displays so status and messaging stay visible without a dedicated operator.",
+      "SLIDER is Rio Optima’s screen application. It loops a playlist of images, videos, YouTube links, and web pages on lobby, warehouse, and operations displays so status and messaging stay visible without a dedicated operator.",
     items: [
-      "Playlist of images, YouTube videos, and live pages",
+      "Playlist of images, uploaded videos, YouTube links, and live pages",
       "Fullscreen player for TVs and public screens",
       "Simple manage view after you log in",
     ],

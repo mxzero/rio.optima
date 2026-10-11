@@ -13,7 +13,7 @@ export default function SliderOverview() {
         </h1>
         <hr className="gold-rule mt-5" />
         <p className="mt-5 text-lg leading-8 text-muted">
-          SLIDER plays a looping playlist of images, YouTube videos, and web
+          SLIDER plays a looping playlist of images, videos, YouTube links, and web
           pages on lobby, warehouse, command-center, and shop-floor screens.
           One playlist. Any display. No dedicated operator standing by the TV.
         </p>
@@ -30,7 +30,7 @@ export default function SliderOverview() {
 
       <div className="grid gap-6 md:grid-cols-3">
         {[
-          ["Build a playlist", "Add photos, YouTube links, or a live web page. Set duration, orientation, and schedule."],
+          ["Build a playlist", "Upload photos and MP4 videos, or add YouTube links and live web pages. Set duration, orientation, and schedule."],
           ["Play it fullscreen", "Open the player on a TV or lobby screen. Active items loop automatically."],
           ["Keep it current", "Log in to swap media when a campaign, safety notice, or status board needs to change."],
         ].map(([title, copy]) => (

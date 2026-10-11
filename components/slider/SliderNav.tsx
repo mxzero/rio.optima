@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { SessionUser, isAdmin } from "@/lib/auth";
 
 export default function SliderNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const loggedIn = Boolean(user);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((response) => response.json())
-      .then((data: { user?: { name: string } | null }) => setLoggedIn(Boolean(data.user)))
-      .catch(() => setLoggedIn(false));
+      .then((data: { user?: SessionUser | null }) => setUser(data.user ?? null))
+      .catch(() => setUser(null));
   }, [pathname]);
 
   async function logout() {
@@ -27,6 +29,7 @@ export default function SliderNav() {
         { href: "/slider", label: "Manage" },
         { href: "/slider/how-to", label: "How to" },
         { href: "/slider/fullscreen", label: "Fullscreen" },
+        ...(isAdmin(user) ? [{ href: "/admin", label: "Admin" }] : []),
       ]
     : [
         { href: "/slider", label: "Overview" },

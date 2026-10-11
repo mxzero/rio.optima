@@ -1,25 +1,42 @@
-export const ADMIN = {
-  name: "Admin",
-  email: "admin@rio.optima",
-  password: "Pass123!",
-} as const;
+// Shared between server and browser code. Nothing secret lives here.
 
 export const SESSION_COOKIE = "rio_session";
-export const SESSION_TOKEN = "rio-optima-admin";
+
+export const ROLES = [
+  { value: "admin", label: "Admin" },
+  { value: "subscriber", label: "Subscriber" },
+] as const;
+
+export const SERVICES = [
+  { value: "tms", label: "TMS" },
+  { value: "slider", label: "Slider" },
+] as const;
+
+export type Role = (typeof ROLES)[number]["value"];
+export type Service = (typeof SERVICES)[number]["value"];
 
 export type SessionUser = {
+  id: string;
   name: string;
   email: string;
+  role: Role;
+  service: Service;
 };
 
-export function credentialsMatch(email: string, password: string) {
-  return (
-    email.trim().toLowerCase() === ADMIN.email.toLowerCase() &&
-    password === ADMIN.password
-  );
+export type AdminUserRow = SessionUser & { createdAt: string; mediaCount: number };
+
+export function isAdmin(user: SessionUser | null | undefined) {
+  return user?.role === "admin";
 }
 
-export function readSessionToken(token: string | undefined): SessionUser | null {
-  if (token !== SESSION_TOKEN) return null;
-  return { name: ADMIN.name, email: ADMIN.email };
+export function canUseSlider(user: SessionUser | null | undefined) {
+  return Boolean(user && (user.role === "admin" || user.service === "slider"));
+}
+
+export function roleLabel(role: Role) {
+  return ROLES.find((item) => item.value === role)?.label ?? role;
+}
+
+export function serviceLabel(service: Service) {
+  return SERVICES.find((item) => item.value === service)?.label ?? service;
 }

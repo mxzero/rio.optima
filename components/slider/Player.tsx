@@ -41,7 +41,7 @@ export default function Player({
       <div className={`grid min-h-[280px] place-items-center bg-navy text-white ${className}`}>
         <div className="p-8 text-center">
           <h2 className="font-display text-2xl font-bold">No active media</h2>
-          <p className="mt-2 text-white/70">Add images, YouTube videos, or URLs from Manage.</p>
+          <p className="mt-2 text-white/70">Add images, videos, YouTube links, or URLs from Manage.</p>
         </div>
       </div>
     );
@@ -75,6 +75,7 @@ export default function Player({
             autoPlay
             muted
             playsInline
+            loop={slides.length === 1}
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element

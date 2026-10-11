@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { SessionUser, isAdmin } from "@/lib/auth";
 
 const links = [
   { href: "/", label: "Home" },
@@ -13,18 +14,16 @@ const links = [
   { href: "/contact", label: "Contact Us" },
 ];
 
-type User = { name: string; email: string };
-
 export default function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((response) => response.json())
-      .then((data: { user?: User | null }) => setUser(data.user || null))
+      .then((data: { user?: SessionUser | null }) => setUser(data.user || null))
       .catch(() => setUser(null));
   }, [pathname]);
 
@@ -79,6 +78,17 @@ export default function SiteHeader() {
           })}
           {user ? (
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+              {isAdmin(user) ? (
+                <Link
+                  href="/admin"
+                  onClick={() => setOpen(false)}
+                  className={`text-[13px] font-semibold tracking-wide uppercase ${
+                    pathname.startsWith("/admin") ? "text-teal" : "text-navy hover:text-teal"
+                  }`}
+                >
+                  Admin
+                </Link>
+              ) : null}
               <span className="text-[13px] font-semibold text-navy">{user.name}</span>
               <button
                 type="button"

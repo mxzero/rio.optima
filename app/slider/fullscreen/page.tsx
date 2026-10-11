@@ -3,13 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Player, { PlayerSlide } from "@/components/slider/Player";
-import { activePlayerSlides, loadSlides } from "@/lib/slider";
+import { activePlayerSlides } from "@/lib/slider";
+import { fetchSlides } from "@/lib/sliderApi";
 
 export default function FullscreenPage() {
   const [slides, setSlides] = useState<PlayerSlide[]>([]);
 
   useEffect(() => {
-    setSlides(activePlayerSlides(loadSlides()));
+    fetchSlides()
+      .then((all) => setSlides(activePlayerSlides(all)))
+      .catch(() => setSlides([]));
   }, []);
 
   return (

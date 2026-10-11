@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, SESSION_TOKEN, credentialsMatch } from "@/lib/auth";
+import { SESSION_COOKIE } from "@/lib/auth";
+import { SESSION_MAX_AGE, createSessionToken } from "@/lib/server/session";
+import { verifyLogin } from "@/lib/server/users";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { email?: string; password?: string };
-  if (!credentialsMatch(body.email || "", body.password || "")) {
+  const user = await verifyLogin(String(body.email || ""), String(body.password || ""));
+  if (!user) {
     return NextResponse.json({ ok: false, error: "Invalid email or password." }, { status: 401 });
   }
 
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE, SESSION_TOKEN, {
+  const response = NextResponse.json({ ok: true, user });
+  response.cookies.set(SESSION_COOKIE, await createSessionToken(user.id), {
     httpOnly: true,
     sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: SESSION_MAX_AGE,
   });
   return response;
 }
