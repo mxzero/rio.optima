@@ -11,7 +11,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { Redis } from "@upstash/redis";
-import { BlobPreconditionFailedError, get as getBlob, put as putBlob } from "@vercel/blob";
+import { BlobNotFoundError, BlobPreconditionFailedError, get as getBlob, head as headBlob, put as putBlob } from "@vercel/blob";
 
 export const DATA_DIR = process.env.RIO_DATA_DIR || path.join(process.cwd(), ".data");
 export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
@@ -67,11 +67,22 @@ const redisBackend = (client: Redis): Backend => ({
 
 const blobPath = (name: string) => `data/${name}.json`;
 
+// The ETag must come from head(): it's the store's version id that put()'s
+// ifMatch compares against. get() reports the CDN's ETag header, which doesn't
+// match. Reading head first is safe: if the file changes before get(), the
+// stale ETag makes the write fail and retry.
 async function readBlobJson<T>(name: string) {
+  let etag: string;
+  try {
+    etag = (await headBlob(blobPath(name))).etag;
+  } catch (error) {
+    if (error instanceof BlobNotFoundError) return null;
+    throw error;
+  }
   const result = await getBlob(blobPath(name), { access: "private", useCache: false });
   if (!result || result.statusCode !== 200) return null;
   const text = await new Response(result.stream).text();
-  return { records: JSON.parse(text) as Records<T>, etag: result.blob.etag };
+  return { records: JSON.parse(text) as Records<T>, etag };
 }
 
 async function writeBlobJson(name: string, records: unknown, etag: string | null) {

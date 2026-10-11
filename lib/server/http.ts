@@ -1,3 +1,4 @@
+import { BlobError } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { MediaError } from "@/lib/server/media";
 import { SetupError } from "@/lib/server/store";
@@ -8,6 +9,9 @@ export function errorResponse(error: unknown) {
   if (error instanceof SetupError) return NextResponse.json({ error: error.message }, { status: 503 });
   if (error instanceof UserError) return NextResponse.json({ error: error.message }, { status: 400 });
   console.error(error);
+  if (error instanceof BlobError) {
+    return NextResponse.json({ error: `Storage error: ${error.message.replace(/^Vercel Blob: /, "")}` }, { status: 502 });
+  }
   return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
 }
 
