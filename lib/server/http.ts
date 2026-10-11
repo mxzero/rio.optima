@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { SlideError } from "@/lib/server/slides";
+import { MediaError } from "@/lib/server/media";
+import { SetupError } from "@/lib/server/store";
 import { UserError } from "@/lib/server/users";
 
 export function errorResponse(error: unknown) {
-  if (error instanceof SlideError) return NextResponse.json({ error: error.message }, { status: error.status });
+  if (error instanceof MediaError) return NextResponse.json({ error: error.message }, { status: error.status });
+  if (error instanceof SetupError) return NextResponse.json({ error: error.message }, { status: 503 });
   if (error instanceof UserError) return NextResponse.json({ error: error.message }, { status: 400 });
   console.error(error);
   return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
@@ -20,7 +22,7 @@ export async function readSlideRequest(request: Request) {
   try {
     raw = JSON.parse(decodeURIComponent(request.headers.get("x-slide") || ""));
   } catch {
-    throw new SlideError("Missing media details.");
+    throw new MediaError("Missing media details.");
   }
   return { raw, upload: { contentType: contentType.split(";")[0].trim(), body: request.body } };
 }

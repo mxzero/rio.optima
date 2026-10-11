@@ -4,17 +4,20 @@ import path from "node:path";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE, SessionUser, canUseSlider, isAdmin } from "@/lib/auth";
-import { DATA_DIR } from "@/lib/server/store";
+import { DATA_DIR, SetupError, storageSecret } from "@/lib/server/store";
 import { findUserById } from "@/lib/server/users";
 
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
 
 let secretPromise: Promise<Buffer> | null = null;
 
-// SESSION_SECRET wins; otherwise a random secret is generated once into .data/.
+// SESSION_SECRET wins. Otherwise derive one from the Redis token (on Vercel), or
+// generate a random one once into .data/ (local).
 function secret() {
   secretPromise ??= (async () => {
     if (process.env.SESSION_SECRET) return Buffer.from(process.env.SESSION_SECRET);
+    if (storageSecret) return crypto.createHash("sha256").update(`rio-session:${storageSecret}`).digest();
+    if (process.env.VERCEL) throw new SetupError("Set SESSION_SECRET or connect Upstash for Redis in Vercel.");
     const file = path.join(DATA_DIR, "session-secret");
     try {
       return Buffer.from(await fs.readFile(file, "utf8"), "hex");
@@ -50,8 +53,16 @@ async function readSessionToken(token: string | undefined) {
 // The signed-in user, re-read from storage so role changes and deletions
 // apply immediately.
 export async function getSessionUser(): Promise<SessionUser | null> {
-  const userId = await readSessionToken((await cookies()).get(SESSION_COOKIE)?.value);
-  return userId ? findUserById(userId) : null;
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  try {
+    const userId = await readSessionToken(token);
+    return userId ? await findUserById(userId) : null;
+  } catch (error) {
+    // Storage not configured yet: treat as signed out; login explains why.
+    if (error instanceof SetupError) return null;
+    throw error;
+  }
 }
 
 type Guard = { user: SessionUser; denied?: never } | { user?: never; denied: NextResponse };

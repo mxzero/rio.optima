@@ -1,75 +1,66 @@
 import crypto from "node:crypto";
-import { createReadStream, createWriteStream, promises as fs } from "node:fs";
-import path from "node:path";
-import { Readable, Transform } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { SessionUser, isAdmin } from "@/lib/auth";
-import { UPLOAD_DIR, readJson, withLock, writeJson } from "@/lib/server/store";
-import { listUsers } from "@/lib/server/users";
 import {
-  IMAGE_MAX_MB,
-  IMAGE_TYPES,
-  MediaType,
-  Slide,
-  SlideFields,
-  VIDEO_MAX_MB,
-  VIDEO_TYPES,
-  demoSlides,
-  uploadedMediaId,
-  uploadedMediaRef,
-  youtubeIdFromUrl,
-} from "@/lib/slider";
+  DirectUpload,
+  MediaError,
+  MediaLocation,
+  allowedTypes,
+  claimBlobUpload,
+  deleteMedia,
+  openMedia,
+  saveDirectUpload,
+} from "@/lib/server/media";
+import { collection } from "@/lib/server/store";
+import { listUsers } from "@/lib/server/users";
+import { MediaType, Slide, demoSlides, uploadedMediaId, uploadedMediaRef, youtubeIdFromUrl } from "@/lib/slider";
 
-type StoredSlide = Slide & { createdAt: string; contentType?: string };
+type StoredSlide = Slide & { createdAt: string; media?: MediaLocation };
 
-const FILE = "slides.json";
-
-export class SlideError extends Error {
-  constructor(
-    message: string,
-    public status = 400,
-  ) {
-    super(message);
-  }
-}
-
-async function seedSlides(): Promise<StoredSlide[]> {
+const slides = collection<StoredSlide>("slides", async () => {
   const admin = (await listUsers()).find((user) => user.role === "admin");
-  const createdAt = new Date().toISOString();
-  return demoSlides.map((slide) => ({ ...slide, ownerId: admin?.id ?? "", createdAt }));
-}
+  const now = Date.now();
+  // Stagger timestamps so the demo slides keep their order.
+  return demoSlides.map((slide, index) => ({
+    ...slide,
+    ownerId: admin?.id ?? "",
+    createdAt: new Date(now - index * 1000).toISOString(),
+  }));
+});
 
-const loadAll = () => readJson<StoredSlide[]>(FILE, seedSlides);
+const newestFirst = (a: StoredSlide, b: StoredSlide) => b.createdAt.localeCompare(a.createdAt);
 
 function visibleTo(user: SessionUser, slide: StoredSlide) {
   return isAdmin(user) || slide.ownerId === user.id;
 }
 
-async function withOwnerNames(slides: StoredSlide[]): Promise<Slide[]> {
+async function withOwnerNames(list: StoredSlide[]): Promise<Slide[]> {
   const names = new Map((await listUsers()).map((user) => [user.id, user.name]));
-  return slides.map((stored) => {
+  return list.map((stored) => {
     const slide: Slide & Partial<StoredSlide> = { ...stored, ownerName: names.get(stored.ownerId) ?? "Removed user" };
     delete slide.createdAt;
-    delete slide.contentType;
+    delete slide.media;
     return slide;
   });
 }
 
+async function findVisible(user: SessionUser, id: string) {
+  const slide = await slides.get(id);
+  if (!slide || !visibleTo(user, slide)) throw new MediaError("Media not found.", 404);
+  return slide;
+}
+
 // Admins see every slide; everyone else only their own.
 export async function listSlidesFor(user: SessionUser) {
-  return withOwnerNames((await loadAll()).filter((slide) => visibleTo(user, slide)));
+  return withOwnerNames((await slides.list()).filter((slide) => visibleTo(user, slide)).sort(newestFirst));
 }
 
 export async function getSlideFor(user: SessionUser, id: string) {
-  const slide = (await loadAll()).find((item) => item.id === id);
-  if (!slide || !visibleTo(user, slide)) throw new SlideError("Media not found.", 404);
-  return (await withOwnerNames([slide]))[0];
+  return (await withOwnerNames([await findVisible(user, id)]))[0];
 }
 
 export async function countSlidesByOwner() {
   const counts = new Map<string, number>();
-  for (const slide of await loadAll()) counts.set(slide.ownerId, (counts.get(slide.ownerId) ?? 0) + 1);
+  for (const slide of await slides.list()) counts.set(slide.ownerId, (counts.get(slide.ownerId) ?? 0) + 1);
   return counts;
 }
 
@@ -77,171 +68,132 @@ export async function countSlidesByOwner() {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-type Upload = { contentType: string; body: ReadableStream<Uint8Array> | null };
-
-function checkFields(raw: unknown, upload: Upload | null, existing?: StoredSlide): Omit<SlideFields, "src"> & { src?: string } {
-  if (!raw || typeof raw !== "object") throw new SlideError("Missing media details.");
+function checkFields(raw: unknown) {
+  if (!raw || typeof raw !== "object") throw new MediaError("Missing media details.");
   const input = raw as Record<string, unknown>;
   const text = (key: string) => (typeof input[key] === "string" ? (input[key] as string).trim() : "");
 
   const name = text("name");
-  if (!name || name.length > 120) throw new SlideError("Slide name is required (up to 120 characters).");
+  if (!name || name.length > 120) throw new MediaError("Slide name is required (up to 120 characters).");
   const durationSeconds = Number(input.durationSeconds);
   if (!Number.isInteger(durationSeconds) || durationSeconds < 1 || durationSeconds > 86400) {
-    throw new SlideError("Duration must be a whole number of seconds, at least 1.");
+    throw new MediaError("Duration must be a whole number of seconds, at least 1.");
   }
   const shortDescription = text("shortDescription");
-  if (shortDescription.length > 255) throw new SlideError("Short description is limited to 255 characters.");
+  if (shortDescription.length > 255) throw new MediaError("Short description is limited to 255 characters.");
   const startDate = text("startDate");
   const endDate = text("endDate");
-  if ((startDate && !DATE.test(startDate)) || (endDate && !DATE.test(endDate))) throw new SlideError("Use valid dates.");
-  const orientation = input.orientation === "portrait" ? "portrait" : "landscape";
+  if ((startDate && !DATE.test(startDate)) || (endDate && !DATE.test(endDate))) throw new MediaError("Use valid dates.");
   const mediaType = input.mediaType as MediaType;
-  if (!["image", "video", "url"].includes(mediaType)) throw new SlideError("Choose a media type.");
-  const isActive = input.isActive !== false;
-  const fields = { name, durationSeconds, shortDescription, startDate, endDate, orientation, mediaType, isActive } as const;
+  if (!["image", "video", "url"].includes(mediaType)) throw new MediaError("Choose a media type.");
 
-  if (upload) {
-    const allowed = mediaType === "image" ? IMAGE_TYPES : mediaType === "video" ? VIDEO_TYPES : [];
-    if (!allowed.includes(upload.contentType)) {
-      throw new SlideError(
-        mediaType === "image" ? "Use a JPG, PNG, GIF, or WebP image." : "Use an MP4 or WebM video.",
-        415,
-      );
-    }
-    return fields;
-  }
+  return {
+    fields: {
+      name,
+      durationSeconds,
+      shortDescription,
+      startDate,
+      endDate,
+      orientation: input.orientation === "portrait" ? ("portrait" as const) : ("landscape" as const),
+      mediaType,
+      isActive: input.isActive !== false,
+    },
+    src: text("src"),
+    blobPathname: text("blobPathname"),
+  };
+}
 
-  // No new file: keep the existing upload, or take a link.
-  if (existing && uploadedMediaId(existing.src) && existing.mediaType === mediaType && !text("src")) {
-    return { ...fields, src: existing.src };
-  }
-  const src = text("src");
-  if (mediaType === "image") throw new SlideError("Upload an image file.");
+function checkLink(mediaType: MediaType, src: string) {
+  if (mediaType === "image") throw new MediaError("Upload an image file.");
   if (mediaType === "video") {
-    if (!youtubeIdFromUrl(src)) throw new SlideError("That does not look like a YouTube video link.");
-    return { ...fields, src };
+    if (!youtubeIdFromUrl(src)) throw new MediaError("That does not look like a YouTube video link.");
+    return src;
   }
   let url: URL;
   try {
     url = new URL(src);
   } catch {
-    throw new SlideError("Enter a full web address starting with https://.");
+    throw new MediaError("Enter a full web address starting with https://.");
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new SlideError("Web page URLs must start with https:// or http://.");
+    throw new MediaError("Web page URLs must start with https:// or http://.");
   }
-  return { ...fields, src: url.toString() };
+  return url.toString();
 }
 
-// ---- Uploaded files ----
-
-class TooLarge extends Error {}
-
-async function saveUpload(upload: Upload, mediaType: MediaType) {
-  if (!upload.body) throw new SlideError("The file was empty.");
-  const maxMb = mediaType === "image" ? IMAGE_MAX_MB : VIDEO_MAX_MB;
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  const id = crypto.randomUUID();
-  const target = path.join(UPLOAD_DIR, id);
-  let size = 0;
-  const limit = new Transform({
-    transform(chunk: Buffer, _encoding, done) {
-      size += chunk.length;
-      if (size > maxMb * 1024 * 1024) done(new TooLarge());
-      else done(null, chunk);
-    },
-  });
-  try {
-    await pipeline(Readable.fromWeb(upload.body as NodeReadableStream<Uint8Array>), limit, createWriteStream(target));
-    if (size === 0) throw new SlideError("The file was empty.");
-  } catch (error) {
-    await fs.rm(target, { force: true });
-    if (error instanceof TooLarge) {
-      throw new SlideError(`File too large. Please upload ${mediaType === "image" ? "an image" : "a video"} smaller than ${maxMb} MB.`, 413);
+// Works out the slide's new source: a fresh upload (streamed or already in
+// Blob), the existing upload, or a link.
+async function resolveSource(
+  user: SessionUser,
+  checked: ReturnType<typeof checkFields>,
+  direct: DirectUpload | null,
+  existing?: StoredSlide,
+): Promise<{ src: string; media?: MediaLocation; isNew: boolean }> {
+  const { mediaType } = checked.fields;
+  if (direct) {
+    if (!allowedTypes(mediaType).includes(direct.contentType)) {
+      throw new MediaError(mediaType === "image" ? "Use a JPG, PNG, GIF, or WebP image." : "Use an MP4 or WebM video.", 415);
     }
-    throw error;
+    const media = await saveDirectUpload(direct, mediaType);
+    return { src: uploadedMediaRef(media.localId!), media, isNew: true };
   }
-  return id;
-}
-
-async function removeUpload(src: string) {
-  const id = uploadedMediaId(src);
-  if (id) await fs.rm(path.join(UPLOAD_DIR, id), { force: true });
-}
-
-export async function openMediaFor(user: SessionUser, mediaId: string) {
-  const slide = (await loadAll()).find((item) => uploadedMediaId(item.src) === mediaId);
-  if (!slide || !visibleTo(user, slide)) throw new SlideError("Media not found.", 404);
-  const file = path.join(UPLOAD_DIR, mediaId);
-  const stat = await fs.stat(file).catch(() => null);
-  if (!stat) throw new SlideError("Media not found.", 404);
-  return {
-    size: stat.size,
-    contentType: slide.contentType || "application/octet-stream",
-    stream: (start?: number, end?: number) => createReadStream(file, { start, end }),
-  };
+  if (checked.blobPathname) {
+    const media = await claimBlobUpload(user.id, checked.blobPathname, mediaType);
+    return { src: uploadedMediaRef(crypto.randomUUID()), media, isNew: true };
+  }
+  if (existing?.media && existing.mediaType === mediaType && !checked.src) {
+    return { src: existing.src, media: existing.media, isNew: false };
+  }
+  return { src: checkLink(mediaType, checked.src), isNew: false };
 }
 
 // ---- Create / update / delete ----
 
-export async function createSlide(user: SessionUser, raw: unknown, upload: Upload | null) {
-  const fields = checkFields(raw, upload);
-  // Stream the file to disk before taking the lock so big uploads don't block others.
-  const mediaId = upload ? await saveUpload(upload, fields.mediaType) : null;
+export async function createSlide(user: SessionUser, raw: unknown, direct: DirectUpload | null) {
+  const checked = checkFields(raw);
+  const source = await resolveSource(user, checked, direct);
   const slide: StoredSlide = {
-    ...fields,
+    ...checked.fields,
     id: crypto.randomUUID(),
-    src: mediaId ? uploadedMediaRef(mediaId) : fields.src!,
+    src: source.src,
+    media: source.media,
     ownerId: user.id,
     createdAt: new Date().toISOString(),
-    contentType: upload?.contentType,
   };
   try {
-    await withLock(async () => writeJson(FILE, [slide, ...(await loadAll())]));
+    await slides.put(slide);
   } catch (error) {
-    if (mediaId) await removeUpload(slide.src);
+    if (source.media) await deleteMedia(source.media);
     throw error;
   }
   return (await withOwnerNames([slide]))[0];
 }
 
-export async function updateSlide(user: SessionUser, id: string, raw: unknown, upload: Upload | null) {
-  const current = (await loadAll()).find((item) => item.id === id);
-  if (!current || !visibleTo(user, current)) throw new SlideError("Media not found.", 404);
-  const fields = checkFields(raw, upload, current);
-  const mediaId = upload ? await saveUpload(upload, fields.mediaType) : null;
-  const src = mediaId ? uploadedMediaRef(mediaId) : fields.src!;
-  let updated: StoredSlide | undefined;
+export async function updateSlide(user: SessionUser, id: string, raw: unknown, direct: DirectUpload | null) {
+  const current = await findVisible(user, id);
+  const checked = checkFields(raw);
+  const source = await resolveSource(user, checked, direct, current);
+  const updated: StoredSlide = { ...current, ...checked.fields, src: source.src, media: source.media };
   try {
-    await withLock(async () => {
-      const slides = await loadAll();
-      const index = slides.findIndex((item) => item.id === id);
-      if (index < 0) throw new SlideError("Media not found.", 404);
-      updated = {
-        ...slides[index],
-        ...fields,
-        src,
-        contentType: mediaId ? upload!.contentType : src === slides[index].src ? slides[index].contentType : undefined,
-      };
-      slides[index] = updated;
-      await writeJson(FILE, slides);
-    });
+    await slides.put(updated);
   } catch (error) {
-    if (mediaId) await removeUpload(src);
+    if (source.isNew && source.media) await deleteMedia(source.media);
     throw error;
   }
-  if (current.src !== src) await removeUpload(current.src);
-  return (await withOwnerNames([updated!]))[0];
+  if (current.media && current.src !== updated.src) await deleteMedia(current.media);
+  return (await withOwnerNames([updated]))[0];
 }
 
 export async function deleteSlide(user: SessionUser, id: string) {
-  const removed = await withLock(async () => {
-    const slides = await loadAll();
-    const slide = slides.find((item) => item.id === id);
-    if (!slide || !visibleTo(user, slide)) throw new SlideError("Media not found.", 404);
-    await writeJson(FILE, slides.filter((item) => item.id !== id));
-    return slide;
-  });
-  await removeUpload(removed.src);
+  const slide = await findVisible(user, id);
+  await slides.remove(id);
+  if (slide.media) await deleteMedia(slide.media);
+}
+
+export async function openMediaFor(user: SessionUser, mediaId: string) {
+  const slide = (await slides.list()).find((item) => uploadedMediaId(item.src) === mediaId);
+  if (!slide?.media || !visibleTo(user, slide)) throw new MediaError("Media not found.", 404);
+  const media = await openMedia(slide.media);
+  if (!media) throw new MediaError("Media not found.", 404);
+  return media;
 }

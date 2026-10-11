@@ -1,5 +1,6 @@
 // Browser-side calls to the SLIDER API.
 
+import { upload } from "@vercel/blob/client";
 import type { Slide, SlideFields } from "@/lib/slider";
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
@@ -32,8 +33,46 @@ export async function removeSlide(id: string) {
   await call(`/api/slider/slides/${id}`, { method: "DELETE" });
 }
 
-// Streams one file to the server, reporting progress from 0 to 1.
-export function uploadSlide(
+type UploadTarget = { mode: "blob" | "direct"; folder: string };
+let target: Promise<UploadTarget> | null = null;
+
+function uploadTarget() {
+  target ??= call<UploadTarget>("/api/slider/upload");
+  target.catch(() => {
+    target = null;
+  });
+  return target;
+}
+
+// Uploads one file and saves its slide, reporting progress from 0 to 1. On
+// Vercel the file goes straight to Blob storage; locally it streams through
+// the API.
+export async function uploadSlide(
+  file: File,
+  fields: SlideFields,
+  onProgress: (fraction: number) => void,
+  id?: string,
+): Promise<Slide> {
+  const { mode, folder } = await uploadTarget();
+  if (mode === "direct") return uploadDirect(file, fields, onProgress, id);
+  const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80) || "upload";
+  let blob;
+  try {
+    blob = await upload(folder + safeName, file, {
+      access: "private",
+      handleUploadUrl: "/api/slider/upload",
+      clientPayload: JSON.stringify({ mediaType: fields.mediaType }),
+      contentType: file.type,
+      multipart: file.size > 50 * 1024 * 1024,
+      onUploadProgress: (event) => onProgress(event.percentage / 100),
+    });
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message.replace(/^Vercel Blob: /, "") : "Upload failed.");
+  }
+  return saveLinkSlide({ ...fields, blobPathname: blob.pathname }, id);
+}
+
+function uploadDirect(
   file: File,
   fields: SlideFields,
   onProgress: (fraction: number) => void,

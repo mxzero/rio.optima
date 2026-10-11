@@ -1,13 +1,11 @@
 import crypto from "node:crypto";
 import { promisify } from "node:util";
 import { ROLES, Role, SERVICES, Service, SessionUser } from "@/lib/auth";
-import { readJson, withLock, writeJson } from "@/lib/server/store";
+import { collection } from "@/lib/server/store";
 
 const scrypt = promisify(crypto.scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
 type UserRecord = SessionUser & { passwordHash: string; createdAt: string };
-
-const FILE = "users.json";
 
 // First run: keep the original built-in admin so existing logins still work.
 const SEED_ADMIN = { name: "Admin", email: "admin@rio.optima", password: "Pass123!" };
@@ -26,7 +24,8 @@ async function seedUsers(): Promise<UserRecord[]> {
   ];
 }
 
-const loadAll = () => readJson<UserRecord[]>(FILE, seedUsers);
+const users = collection<UserRecord>("users", seedUsers);
+const loadAll = () => users.list();
 
 export async function hashPassword(password: string) {
   const salt = crypto.randomBytes(16);
@@ -49,11 +48,13 @@ function toPublic({ id, name, email, role, service }: UserRecord): SessionUser {
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 export async function listUsers() {
-  return (await loadAll()).map((user) => ({ ...toPublic(user), createdAt: user.createdAt }));
+  return (await loadAll())
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((user) => ({ ...toPublic(user), createdAt: user.createdAt }));
 }
 
 export async function findUserById(id: string) {
-  const user = (await loadAll()).find((item) => item.id === id);
+  const user = await users.get(id);
   return user ? toPublic(user) : null;
 }
 
@@ -106,62 +107,56 @@ function checkInput(input: UserInput, creating: boolean): Checked | string {
 
 export class UserError extends Error {}
 
-export function createUser(input: UserInput) {
-  return withLock(async () => {
-    const checked = checkInput(input, true);
-    if (typeof checked === "string") throw new UserError(checked);
-    const users = await loadAll();
-    if (users.some((user) => user.email === checked.email)) throw new UserError("A user with that email already exists.");
-    const user: UserRecord = {
-      id: crypto.randomUUID(),
-      name: checked.name!,
-      email: checked.email!,
-      role: checked.role!,
-      service: checked.service!,
-      passwordHash: await hashPassword(checked.password!),
-      createdAt: new Date().toISOString(),
-    };
-    await writeJson(FILE, [...users, user]);
-    return toPublic(user);
-  });
+export async function createUser(input: UserInput) {
+  const checked = checkInput(input, true);
+  if (typeof checked === "string") throw new UserError(checked);
+  const all = await loadAll();
+  if (all.some((user) => user.email === checked.email)) throw new UserError("A user with that email already exists.");
+  const user: UserRecord = {
+    id: crypto.randomUUID(),
+    name: checked.name!,
+    email: checked.email!,
+    role: checked.role!,
+    service: checked.service!,
+    passwordHash: await hashPassword(checked.password!),
+    createdAt: new Date().toISOString(),
+  };
+  await users.put(user);
+  return toPublic(user);
 }
 
-export function updateUser(actorId: string, id: string, input: UserInput) {
-  return withLock(async () => {
-    const checked = checkInput(input, false);
-    if (typeof checked === "string") throw new UserError(checked);
-    const users = await loadAll();
-    const user = users.find((item) => item.id === id);
-    if (!user) throw new UserError("User not found.");
-    if (checked.email && users.some((item) => item.id !== id && item.email === checked.email)) {
-      throw new UserError("A user with that email already exists.");
-    }
-    if (checked.role && checked.role !== "admin" && user.role === "admin") {
-      if (id === actorId) throw new UserError("You can't remove your own admin role.");
-      if (users.filter((item) => item.role === "admin").length <= 1) {
-        throw new UserError("There must be at least one admin.");
-      }
-    }
-    const { password, ...rest } = checked;
-    const updated: UserRecord = {
-      ...user,
-      ...rest,
-      passwordHash: password ? await hashPassword(password) : user.passwordHash,
-    };
-    await writeJson(FILE, users.map((item) => (item.id === id ? updated : item)));
-    return toPublic(updated);
-  });
-}
-
-export function deleteUser(actorId: string, id: string) {
-  return withLock(async () => {
-    if (id === actorId) throw new UserError("You can't delete your own account.");
-    const users = await loadAll();
-    const user = users.find((item) => item.id === id);
-    if (!user) throw new UserError("User not found.");
-    if (user.role === "admin" && users.filter((item) => item.role === "admin").length <= 1) {
+export async function updateUser(actorId: string, id: string, input: UserInput) {
+  const checked = checkInput(input, false);
+  if (typeof checked === "string") throw new UserError(checked);
+  const all = await loadAll();
+  const user = all.find((item) => item.id === id);
+  if (!user) throw new UserError("User not found.");
+  if (checked.email && all.some((item) => item.id !== id && item.email === checked.email)) {
+    throw new UserError("A user with that email already exists.");
+  }
+  if (checked.role && checked.role !== "admin" && user.role === "admin") {
+    if (id === actorId) throw new UserError("You can't remove your own admin role.");
+    if (all.filter((item) => item.role === "admin").length <= 1) {
       throw new UserError("There must be at least one admin.");
     }
-    await writeJson(FILE, users.filter((item) => item.id !== id));
-  });
+  }
+  const { password, ...rest } = checked;
+  const updated: UserRecord = {
+    ...user,
+    ...rest,
+    passwordHash: password ? await hashPassword(password) : user.passwordHash,
+  };
+  await users.put(updated);
+  return toPublic(updated);
+}
+
+export async function deleteUser(actorId: string, id: string) {
+  if (id === actorId) throw new UserError("You can't delete your own account.");
+  const all = await loadAll();
+  const user = all.find((item) => item.id === id);
+  if (!user) throw new UserError("User not found.");
+  if (user.role === "admin" && all.filter((item) => item.role === "admin").length <= 1) {
+    throw new UserError("There must be at least one admin.");
+  }
+  await users.remove(id);
 }

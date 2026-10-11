@@ -3,12 +3,16 @@ import { errorResponse } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
 import { openMediaFor } from "@/lib/server/slides";
 
-// Streams an uploaded file. Supports Range requests so videos can seek.
+// Sends an uploaded file the user may see: a redirect to a short-lived signed
+// Blob URL, or a local file stream with Range support so videos can seek.
 export async function GET(request: Request, ctx: RouteContext<"/api/slider/media/[id]">) {
   const { user, denied } = await requireUser("slider");
   if (denied) return denied;
   try {
     const media = await openMediaFor(user, (await ctx.params).id);
+    if ("redirect" in media) {
+      return new Response(null, { status: 302, headers: { Location: media.redirect, "Cache-Control": "private, no-store" } });
+    }
     const headers = new Headers({
       "Content-Type": media.contentType,
       "Accept-Ranges": "bytes",

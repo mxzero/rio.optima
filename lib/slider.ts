@@ -23,7 +23,7 @@ export type Slide = {
 export type SlideFields = Pick<
   Slide,
   "name" | "durationSeconds" | "shortDescription" | "startDate" | "endDate" | "orientation" | "mediaType" | "isActive"
-> & { src?: string };
+> & { src?: string; blobPathname?: string };
 
 const MEDIA_PREFIX = "media:";
 
