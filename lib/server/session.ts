@@ -11,13 +11,13 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
 
 let secretPromise: Promise<Buffer> | null = null;
 
-// SESSION_SECRET wins. Otherwise derive one from the Redis token (on Vercel), or
+// SESSION_SECRET wins. Otherwise derive one from the storage token (on Vercel), or
 // generate a random one once into .data/ (local).
 function secret() {
   secretPromise ??= (async () => {
     if (process.env.SESSION_SECRET) return Buffer.from(process.env.SESSION_SECRET);
     if (storageSecret) return crypto.createHash("sha256").update(`rio-session:${storageSecret}`).digest();
-    if (process.env.VERCEL) throw new SetupError("Set SESSION_SECRET or connect Upstash for Redis in Vercel.");
+    if (process.env.VERCEL) throw new SetupError("Set SESSION_SECRET or connect a Blob store in Vercel.");
     const file = path.join(DATA_DIR, "session-secret");
     try {
       return Buffer.from(await fs.readFile(file, "utf8"), "hex");
