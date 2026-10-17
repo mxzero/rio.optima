@@ -11,7 +11,7 @@ import {
   saveDirectUpload,
 } from "@/lib/server/media";
 import { collection } from "@/lib/server/store";
-import { findUserById, findUserByShortId, listUsers } from "@/lib/server/users";
+import { findUserById, findUserByShortId, findUserByTvCode, listUsers } from "@/lib/server/users";
 import { MediaType, Slide, demoSlides, uploadedMediaId, uploadedMediaRef, youtubeIdFromUrl } from "@/lib/slider";
 
 type StoredSlide = Slide & { createdAt: string; media?: MediaLocation };
@@ -53,7 +53,13 @@ async function findVisible(user: SessionUser, id: string) {
 // it exists, is active, and has the Slider service (or is an admin).
 export async function findPlayerOwner(key: string) {
   const parsed = parsePlayerKey(key);
-  const user = !parsed ? null : "shortId" in parsed ? await findUserByShortId(parsed.shortId) : await findUserById(parsed.id);
+  const user = !parsed
+    ? null
+    : "tvCode" in parsed
+      ? await findUserByTvCode(parsed.tvCode)
+      : "shortId" in parsed
+        ? await findUserByShortId(parsed.shortId)
+        : await findUserById(parsed.id);
   return canUseSlider(user) ? user : null;
 }
 

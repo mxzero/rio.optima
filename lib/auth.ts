@@ -19,6 +19,8 @@ export type SessionUser = {
   id: string;
   // Short, readable id like RIO-7K2QX, used in player links.
   shortId: string;
+  // 3-character TV code like K7M, used in short player links (/sfs/K7M).
+  tvCode: string;
   name: string;
   email: string;
   role: Role;
@@ -42,28 +44,24 @@ export const SHORT_ID_PREFIX = "RIO-";
 const SHORT_ID_AT_END = /(RIO-[A-Z0-9]{5})$/i;
 const UUID_AT_END = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
-// Public player links look like /slider/fullscreen/sam-sub-RIO-7K2QX. Only the
-// id at the end matters; the name part just makes the link readable.
-export function playerKey(user: Pick<SessionUser, "shortId" | "name">) {
-  const slug = user.name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug ? `${slug}-${user.shortId}` : user.shortId;
-}
+// TV codes: a letter, then 2 more characters, from the same alphabet.
+export const TV_CODE_LETTERS = SHORT_ID_ALPHABET.replace(/[0-9]/g, "");
+const TV_CODE = /^[A-Z][A-Z0-9]{2}$/i;
 
-// Which user a player key points at. Links made before short ids existed end
-// in the full user id, and keep working.
-export function parsePlayerKey(key: string): { shortId: string } | { id: string } | null {
+// Which user a player key points at: a TV code (/sfs/K7M), or an older
+// /slider/fullscreen link ending in a short id (sam-sub-RIO-7K2QX) or, from
+// before short ids existed, the full user id. Old links keep working.
+export function parsePlayerKey(key: string): { tvCode: string } | { shortId: string } | { id: string } | null {
+  if (TV_CODE.test(key)) return { tvCode: key.toUpperCase() };
   const short = key.match(SHORT_ID_AT_END)?.[1];
   if (short) return { shortId: short.toUpperCase() };
   const id = key.match(UUID_AT_END)?.[1];
   return id ? { id: id.toLowerCase() } : null;
 }
 
-export function playerPath(user: Pick<SessionUser, "shortId" | "name">) {
-  return `/slider/fullscreen/${playerKey(user)}`;
+// Public player links look like /sfs/K7M.
+export function playerPath(user: Pick<SessionUser, "tvCode">) {
+  return `/sfs/${user.tvCode}`;
 }
 
 export function roleLabel(role: Role) {

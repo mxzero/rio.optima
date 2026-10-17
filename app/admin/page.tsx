@@ -87,6 +87,7 @@ export default function AdminPage() {
               <tr>
                 <th className="px-3 py-3 font-semibold">Name</th>
                 <th className="px-3 py-3 font-semibold">ID</th>
+                <th className="px-3 py-3 font-semibold">TV code</th>
                 <th className="px-3 py-3 font-semibold">Email</th>
                 <th className="px-3 py-3 font-semibold">Role</th>
                 <th className="px-3 py-3 font-semibold">Service</th>
@@ -99,7 +100,7 @@ export default function AdminPage() {
             <tbody>
               {users === null ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-muted">
+                  <td colSpan={10} className="px-3 py-8 text-center text-muted">
                     Loading…
                   </td>
                 </tr>
@@ -272,6 +273,7 @@ function UserRow({
         {isMe ? <span className="ml-1 text-xs text-muted">(you)</span> : null}
       </td>
       <td className="px-3 py-3 font-mono text-xs whitespace-nowrap text-navy">{user.shortId}</td>
+      <td className="px-3 py-3 font-mono text-xs whitespace-nowrap text-navy">{user.tvCode}</td>
       <td className="px-3 py-3">{user.email}</td>
       <td className="px-3 py-3">
         <select

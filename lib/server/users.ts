@@ -1,15 +1,25 @@
 import crypto from "node:crypto";
 import { promisify } from "node:util";
-import { ROLES, Role, SERVICES, SHORT_ID_ALPHABET, SHORT_ID_PREFIX, Service, SessionUser } from "@/lib/auth";
+import {
+  ROLES,
+  Role,
+  SERVICES,
+  SHORT_ID_ALPHABET,
+  SHORT_ID_PREFIX,
+  Service,
+  SessionUser,
+  TV_CODE_LETTERS,
+} from "@/lib/auth";
 import { collection } from "@/lib/server/store";
 
 const scrypt = promisify(crypto.scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
 // Records saved before these fields existed have no `active` (they count as
-// active) and no `shortId` (one is assigned on first load).
-type UserRecord = Omit<SessionUser, "active" | "shortId"> & {
+// active) and no `shortId` or `tvCode` (assigned on first load).
+type UserRecord = Omit<SessionUser, "active" | "shortId" | "tvCode"> & {
   active?: boolean;
   shortId?: string;
+  tvCode?: string;
   passwordHash: string;
   createdAt: string;
 };
@@ -25,6 +35,21 @@ function newShortId(taken: Set<string>) {
   }
 }
 
+// 24 × 32 × 32 = 24,576 codes in all.
+function newTvCode(taken: Set<string>) {
+  for (;;) {
+    let code = TV_CODE_LETTERS[crypto.randomInt(TV_CODE_LETTERS.length)];
+    for (let i = 0; i < 2; i++) code += SHORT_ID_ALPHABET[crypto.randomInt(SHORT_ID_ALPHABET.length)];
+    if (!taken.has(code)) {
+      taken.add(code);
+      return code;
+    }
+  }
+}
+
+const takenIds = (all: UserRecord[], field: "shortId" | "tvCode") =>
+  new Set(all.map((user) => user[field]).filter((id): id is string => Boolean(id)));
+
 // First run: keep the original built-in admin so existing logins still work.
 const SEED_ADMIN = { name: "Admin", email: "admin@rio.optima", password: "Pass123!" };
 
@@ -33,6 +58,7 @@ async function seedUsers(): Promise<UserRecord[]> {
     {
       id: crypto.randomUUID(),
       shortId: newShortId(new Set()),
+      tvCode: newTvCode(new Set()),
       name: SEED_ADMIN.name,
       email: SEED_ADMIN.email,
       role: "admin",
@@ -45,17 +71,23 @@ async function seedUsers(): Promise<UserRecord[]> {
 }
 
 const users = collection<UserRecord>("users", seedUsers);
-// Gives any user without a short id one, once per process.
+// Gives any user without a short id or TV code one, once per process.
 let backfill: Promise<void> | null = null;
 
 async function loadAll() {
   const all = await users.list();
-  if (all.every((user) => user.shortId)) return all;
+  if (all.every((user) => user.shortId && user.tvCode)) return all;
   backfill ??= (async () => {
     const current = await users.list();
-    const taken = new Set(current.map((user) => user.shortId).filter((id): id is string => Boolean(id)));
+    const shortIds = takenIds(current, "shortId");
+    const tvCodes = takenIds(current, "tvCode");
     for (const user of current) {
-      if (!user.shortId) await users.put({ ...user, shortId: newShortId(taken) });
+      if (user.shortId && user.tvCode) continue;
+      await users.put({
+        ...user,
+        shortId: user.shortId || newShortId(shortIds),
+        tvCode: user.tvCode || newTvCode(tvCodes),
+      });
     }
   })().finally(() => {
     backfill = null;
@@ -78,8 +110,8 @@ async function passwordMatches(password: string, stored: string) {
   return crypto.timingSafeEqual(actual, expected);
 }
 
-function toPublic({ id, shortId, name, email, role, service, active }: UserRecord): SessionUser {
-  return { id, shortId: shortId ?? "", name, email, role, service, active: active !== false };
+function toPublic({ id, shortId, tvCode, name, email, role, service, active }: UserRecord): SessionUser {
+  return { id, shortId: shortId ?? "", tvCode: tvCode ?? "", name, email, role, service, active: active !== false };
 }
 
 function activeAdminCount(all: UserRecord[]) {
@@ -101,6 +133,11 @@ export async function findUserById(id: string) {
 
 export async function findUserByShortId(shortId: string) {
   const user = (await loadAll()).find((item) => item.shortId === shortId.toUpperCase());
+  return user ? toPublic(user) : null;
+}
+
+export async function findUserByTvCode(tvCode: string) {
+  const user = (await loadAll()).find((item) => item.tvCode === tvCode.toUpperCase());
   return user ? toPublic(user) : null;
 }
 
@@ -165,7 +202,8 @@ export async function createUser(input: UserInput) {
   if (all.some((user) => user.email === checked.email)) throw new UserError("A user with that email already exists.");
   const user: UserRecord = {
     id: crypto.randomUUID(),
-    shortId: newShortId(new Set(all.map((item) => item.shortId).filter((id): id is string => Boolean(id)))),
+    shortId: newShortId(takenIds(all, "shortId")),
+    tvCode: newTvCode(takenIds(all, "tvCode")),
     name: checked.name!,
     email: checked.email!,
     role: checked.role!,
