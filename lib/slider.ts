@@ -17,8 +17,8 @@ export type Slide = {
   isActive: boolean;
   // Position in the owner's playlist, from 1.
   order: number;
-  // Which of the owner's TVs plays it; null plays it on every TV.
-  tvNumber: number | null;
+  // Which of the owner's TVs plays it; TV 1 (All) plays it on every TV.
+  tvNumber: number;
   ownerId: string;
   ownerName?: string;
   // The owner's Total TV, for the TV number choices.

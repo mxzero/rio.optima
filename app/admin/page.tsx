@@ -82,12 +82,11 @@ export default function AdminPage() {
       <div>
         <h2 className="font-display text-xl font-bold text-navy">Users</h2>
         <div className="mt-3 overflow-x-auto border border-navy/10 bg-white">
-          <table className="w-full min-w-[1120px] text-left text-sm">
+          <table className="w-full min-w-[1060px] text-left text-sm">
             <thead className="bg-navy text-white">
               <tr>
                 <th className="px-3 py-3 font-semibold">Name</th>
-                <th className="px-3 py-3 font-semibold">ID</th>
-                <th className="px-3 py-3 font-semibold">TV code</th>
+                <th className="px-3 py-3 font-semibold">User Code</th>
                 <th className="px-3 py-3 font-semibold">Email</th>
                 <th className="px-3 py-3 font-semibold">Role</th>
                 <th className="px-3 py-3 font-semibold">Service</th>
@@ -101,7 +100,7 @@ export default function AdminPage() {
             <tbody>
               {users === null ? (
                 <tr>
-                  <td colSpan={11} className="px-3 py-8 text-center text-muted">
+                  <td colSpan={10} className="px-3 py-8 text-center text-muted">
                     Loading…
                   </td>
                 </tr>
@@ -279,7 +278,6 @@ function UserRow({
         {user.name}
         {isMe ? <span className="ml-1 text-xs text-muted">(you)</span> : null}
       </td>
-      <td className="px-3 py-3 font-mono text-xs whitespace-nowrap text-navy">{user.shortId}</td>
       <td className="px-3 py-3 font-mono text-xs whitespace-nowrap text-navy">{user.tvCode}</td>
       <td className="px-3 py-3">{user.email}</td>
       <td className="px-3 py-3">

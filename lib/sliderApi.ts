@@ -33,7 +33,7 @@ export async function removeSlide(id: string) {
   await call(`/api/slider/slides/${id}`, { method: "DELETE" });
 }
 
-export async function placeSlide(id: string, placement: { order?: number; tvNumber?: number | null }) {
+export async function placeSlide(id: string, placement: { order?: number; tvNumber?: number }) {
   return (await call<{ slide: Slide }>(`/api/slider/slides/${id}/placement`, json("PATCH", placement))).slide;
 }
 

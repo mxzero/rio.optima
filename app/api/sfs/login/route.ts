@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { canUseSlider, parseTvChoice } from "@/lib/auth";
+import { canUseSlider, parseTvNumber } from "@/lib/auth";
 import { errorResponse } from "@/lib/server/http";
 import { ScreenBusyError, claimScreen, readScreenPass, setScreenCookie } from "@/lib/server/screens";
 import { findUserByTvCode, verifyPasswordFor } from "@/lib/server/users";
 
 // A TV signing in at /sfs/<code>: the code picks the account, the TV types the
-// password and chooses a TV number (or All).
+// password and chooses a TV number (TV 1 is the All TV).
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { code?: unknown; tv?: unknown; password?: unknown };
   try {
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     if (!canUseSlider(owner)) {
       return NextResponse.json({ error: "This TV code isn't linked to an active SLIDER account." }, { status: 403 });
     }
-    const tv = parseTvChoice(body.tv);
+    const tv = parseTvNumber(body.tv);
     if (tv === null) return NextResponse.json({ error: "Choose a TV number." }, { status: 400 });
     if (!(await verifyPasswordFor(owner!.id, String(body.password || "")))) {
       return NextResponse.json({ error: "Wrong password." }, { status: 401 });

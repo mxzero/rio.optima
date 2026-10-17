@@ -6,8 +6,9 @@ export const SCREEN_COOKIE = "rio_screen";
 
 export const MAX_TVS = 100;
 
-// What a TV plays: everything, or one TV number's media.
-export type TvChoice = number | "all";
+// TVs are numbered 1 to Total TV. TV 1 is the "All" TV: it plays every item,
+// and media set to TV 1 plays on every TV.
+export const ALL_TV = 1;
 
 export const ROLES = [
   { value: "admin", label: "Admin" },
@@ -62,12 +63,11 @@ export function isValidTvCode(code: string | undefined): code is string {
   return Boolean(code && TV_CODE.test(code) && /[0-9]/.test(code));
 }
 
-export function tvLabel(tv: TvChoice) {
-  return tv === "all" ? "All TVs" : `TV ${tv}`;
+export function tvLabel(tv: number) {
+  return tv === ALL_TV ? `TV ${ALL_TV} (All)` : `TV ${tv}`;
 }
 
-export function parseTvChoice(value: unknown): TvChoice | null {
-  if (value === "all") return "all";
+export function parseTvNumber(value: unknown): number | null {
   const tv = Number(value);
   return Number.isInteger(tv) && tv >= 1 && tv <= MAX_TVS ? tv : null;
 }

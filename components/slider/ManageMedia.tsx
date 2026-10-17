@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import PlayerLink from "@/components/slider/PlayerLink";
+import { tvLabel } from "@/lib/auth";
 import { Slide, isUploadedMedia, mediaLabel } from "@/lib/slider";
 import { fetchSlides, placeSlide, removeSlide } from "@/lib/sliderApi";
 
@@ -44,7 +45,7 @@ export default function ManageMedia() {
   }
 
   // Moving one slide renumbers the rest, so reload the list afterwards.
-  async function place(id: string, placement: { order?: number; tvNumber?: number | null }) {
+  async function place(id: string, placement: { order?: number; tvNumber?: number }) {
     setBusyId(id);
     try {
       await placeSlide(id, placement);
@@ -120,23 +121,18 @@ export default function ManageMedia() {
                     <td className="px-3 py-3">
                       <select
                         aria-label={`TV number for ${slide.name}`}
-                        value={slide.tvNumber ?? "all"}
+                        value={slide.tvNumber}
                         disabled={busy}
-                        onChange={(event) =>
-                          place(slide.id, {
-                            tvNumber: event.target.value === "all" ? null : Number(event.target.value),
-                          })
-                        }
+                        onChange={(event) => place(slide.id, { tvNumber: Number(event.target.value) })}
                         className={cellSelect}
                       >
-                        <option value="all">All</option>
                         {range(ownerTvs).map((tv) => (
                           <option key={tv} value={tv}>
-                            TV {tv}
+                            {tvLabel(tv)}
                           </option>
                         ))}
                         {/* The owner's Total TV was lowered after this was set. */}
-                        {slide.tvNumber && slide.tvNumber > ownerTvs ? (
+                        {slide.tvNumber > ownerTvs ? (
                           <option value={slide.tvNumber}>TV {slide.tvNumber} (over limit)</option>
                         ) : null}
                       </select>
@@ -201,10 +197,9 @@ export default function ManageMedia() {
         </ul>
         <h2 className="font-display mt-6 text-lg font-bold text-navy">Playing on TVs</h2>
         <p className="mt-2">
-          Open your player link above on a TV, pick a TV number and enter your password. A TV set to All plays every
-          active item in order; TV 2 plays items set to TV 2 plus items set to All. Each TV number plays on one screen
-          at a time, and only as many screens as your Total TV can play at once. Players check for changes every 5
-          minutes.
+          Open your player link above on a TV, pick a TV number and enter your password. TV 1 (All) plays every active
+          item in order; TV 2 plays items set to TV 2 plus items set to TV 1 (All). TV numbers go up to your Total TV,
+          and each plays on one screen at a time. Players check for changes every 5 minutes.
         </p>
       </div>
     </section>

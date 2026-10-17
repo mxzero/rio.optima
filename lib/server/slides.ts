@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { SessionUser, TvChoice, canUseSlider, isAdmin, parsePlayerKey } from "@/lib/auth";
+import { ALL_TV, SessionUser, canUseSlider, isAdmin, parsePlayerKey } from "@/lib/auth";
 import {
   DirectUpload,
   MediaError,
@@ -15,7 +15,8 @@ import { findUserById, findUserByShortId, findUserByTvCode, listUsers } from "@/
 import { MediaType, Slide, demoSlides, uploadedMediaId, uploadedMediaRef, youtubeIdFromUrl } from "@/lib/slider";
 
 // Slides saved before ordering existed have no `order` (they play after the
-// ordered ones, newest first) and no `tvNumber` (every TV).
+// ordered ones, newest first) and no `tvNumber`, or null from when "All" was a
+// separate choice; both mean TV 1 (All).
 type StoredSlide = Omit<Slide, "order" | "tvNumber" | "ownerName" | "ownerTvs"> & {
   order?: number;
   tvNumber?: number | null;
@@ -29,7 +30,7 @@ const slides = collection<StoredSlide>("slides", async () => {
   return demoSlides.map((slide, index) => ({
     ...slide,
     order: index + 1,
-    tvNumber: null,
+    tvNumber: ALL_TV,
     ownerId: admin?.id ?? "",
     createdAt: new Date(now - index * 1000).toISOString(),
   }));
@@ -68,7 +69,7 @@ async function withOwnerNames(list: StoredSlide[]): Promise<Slide[]> {
     const slide: Slide & Partial<Pick<StoredSlide, "createdAt" | "media">> = {
       ...stored,
       order: positions.get(stored.id) ?? stored.order ?? 1,
-      tvNumber: stored.tvNumber ?? null,
+      tvNumber: stored.tvNumber ?? ALL_TV,
       ownerName: owner?.name ?? "Removed user",
       ownerTvs: owner?.totalTvs ?? 1,
     };
@@ -111,12 +112,14 @@ export async function listSlidesFor(user: SessionUser) {
   );
 }
 
-// What one of the owner's TVs plays: their own slides in order. A numbered TV
-// plays the slides set to its number plus the ones set to All.
-export async function listTvPlaylist(owner: SessionUser, tv: TvChoice) {
-  const playlist = playlistOf(await slides.list(), owner.id).filter(
-    (slide) => tv === "all" || slide.tvNumber == null || slide.tvNumber === tv,
-  );
+// What one of the owner's TVs plays: their own slides in order. TV 1 (All)
+// plays every slide; another TV plays the slides set to its number plus the
+// ones set to TV 1 (All).
+export async function listTvPlaylist(owner: SessionUser, tv: number) {
+  const playlist = playlistOf(await slides.list(), owner.id).filter((slide) => {
+    const slideTv = slide.tvNumber ?? ALL_TV;
+    return tv === ALL_TV || slideTv === ALL_TV || slideTv === tv;
+  });
   return withOwnerNames(playlist);
 }
 
@@ -215,7 +218,7 @@ async function resolveSource(
 
 // ---- Create / update / delete ----
 
-// New slides go to the end of the playlist and play on every TV.
+// New slides go to the end of the playlist, on TV 1 (All).
 export async function createSlide(user: SessionUser, raw: unknown, direct: DirectUpload | null) {
   const checked = checkFields(raw);
   const source = await resolveSource(user, checked, direct);
@@ -224,7 +227,7 @@ export async function createSlide(user: SessionUser, raw: unknown, direct: Direc
     id: crypto.randomUUID(),
     src: source.src,
     media: source.media,
-    tvNumber: null,
+    tvNumber: ALL_TV,
     ownerId: user.id,
     createdAt: new Date().toISOString(),
   };
@@ -262,12 +265,12 @@ export async function placeSlide(user: SessionUser, id: string, raw: unknown) {
   const current = await findVisible(user, id);
   const input = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
 
-  let tvNumber: number | null | undefined;
+  let tvNumber: number | undefined;
   if (input.tvNumber !== undefined) {
     const ownerTvs = (await findUserById(current.ownerId))?.totalTvs ?? 1;
-    tvNumber = input.tvNumber === null || input.tvNumber === "all" ? null : Number(input.tvNumber);
-    if (tvNumber !== null && (!Number.isInteger(tvNumber) || tvNumber < 1 || tvNumber > ownerTvs)) {
-      throw new MediaError(`Choose All or a TV from 1 to ${ownerTvs}.`);
+    tvNumber = Number(input.tvNumber);
+    if (!Number.isInteger(tvNumber) || tvNumber < 1 || tvNumber > ownerTvs) {
+      throw new MediaError(`Choose a TV from 1 to ${ownerTvs}.`);
     }
   }
   let order: number | undefined;

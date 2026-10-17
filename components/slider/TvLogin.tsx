@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { TvChoice } from "@/lib/auth";
+import { ALL_TV, tvLabel } from "@/lib/auth";
 
 type Notice = { message: string; reason: "limit" | "taken" };
 
@@ -21,11 +21,11 @@ export default function TvLogin({
   code: string;
   username: string;
   totalTvs: number;
-  lastTv?: TvChoice;
+  lastTv?: number;
   notice?: Notice;
 }) {
   const router = useRouter();
-  const [tv, setTv] = useState<string>(String(lastTv && (lastTv === "all" || lastTv <= totalTvs) ? lastTv : "all"));
+  const [tv, setTv] = useState(lastTv && lastTv <= totalTvs ? lastTv : ALL_TV);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState<Notice | null>(initialNotice ?? null);
@@ -84,11 +84,10 @@ export default function TvLogin({
           </label>
           <label className="grid gap-1.5 text-sm font-semibold text-navy">
             TV number
-            <select name="tv" value={tv} onChange={(event) => setTv(event.target.value)} className={fieldClass}>
-              <option value="all">All (plays every item)</option>
+            <select name="tv" value={tv} onChange={(event) => setTv(Number(event.target.value))} className={fieldClass}>
               {Array.from({ length: totalTvs }, (_, index) => index + 1).map((number) => (
                 <option key={number} value={number}>
-                  TV {number}
+                  {tvLabel(number)}
                 </option>
               ))}
             </select>
