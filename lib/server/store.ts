@@ -110,6 +110,13 @@ async function readBlobJson<T>(name: string) {
   return { records: JSON.parse(text) as Records<T>, etag };
 }
 
+// Plain reads need no ETag, so they skip head(): one billed operation, not two.
+async function readBlobRecords<T>(name: string) {
+  const result = await getBlob(blobPath(name), { access: "private", useCache: false });
+  if (!result || result.statusCode !== 200) return null;
+  return JSON.parse(await new Response(result.stream).text()) as Records<T>;
+}
+
 async function writeBlobJson(name: string, records: unknown, etag: string | null) {
   await putBlob(blobPath(name), JSON.stringify(records), {
     access: "private",
@@ -121,11 +128,15 @@ async function writeBlobJson(name: string, records: unknown, etag: string | null
 }
 
 // Read-modify-write, retried when another request changed the file first.
+// Nothing is written when `change` leaves the records as they were: uploads
+// are the costly Blob operation.
 async function updateBlob<T>(name: string, change: (records: Records<T>) => void) {
   for (let attempt = 0; ; attempt++) {
     const current = await readBlobJson<T>(name);
     const records = current?.records ?? {};
+    const before = JSON.stringify(records);
     change(records);
+    if (current && JSON.stringify(records) === before) return;
     try {
       await writeBlobJson(name, records, current?.etag ?? null);
       return;
@@ -138,9 +149,7 @@ async function updateBlob<T>(name: string, change: (records: Records<T>) => void
 }
 
 const blobBackend: Backend = {
-  async read<T>(name: string) {
-    return (await readBlobJson<T>(name))?.records ?? null;
-  },
+  read: readBlobRecords,
   async create(name, records) {
     try {
       await writeBlobJson(name, records, null);
@@ -226,8 +235,11 @@ const fileBackend: Backend = {
     }),
   mutate: <T>(name: string, change: (records: Records<T>) => void) =>
     withLock(async () => {
-      const records = (await readFileRecords<T>(name)) ?? {};
+      const current = await readFileRecords<T>(name);
+      const records = current ?? {};
+      const before = JSON.stringify(records);
       change(records);
+      if (current && JSON.stringify(records) === before) return;
       await writeFileRecords(name, records);
     }),
 };
@@ -248,27 +260,39 @@ export type Collection<T extends { id: string }> = {
 
 // A named set of records, seeded the first time it's read while missing.
 export function collection<T extends { id: string }>(name: string, seed: () => Promise<T[]>): Collection<T> {
+  // Once this process has seen the collection, writes skip the seeding read.
+  let exists = false;
+
   async function readAll(): Promise<Records<T>> {
     assertWritableStorage();
     const existing = await backend.read<T>(name);
-    if (existing) return existing;
+    if (existing) {
+      exists = true;
+      return existing;
+    }
     await backend.create(name, Object.fromEntries((await seed()).map((record) => [record.id, record])));
+    exists = true;
     return (await backend.read<T>(name)) ?? {};
+  }
+
+  async function ensureExists() {
+    if (exists) assertWritableStorage();
+    else await readAll();
   }
 
   return {
     list: async () => Object.values(await readAll()),
     get: async (id) => (await readAll())[id] ?? null,
     async put(record) {
-      await readAll();
+      await ensureExists();
       await backend.set(name, record.id, record);
     },
     async remove(id) {
-      await readAll();
+      await ensureExists();
       await backend.remove(name, id);
     },
     async update(change) {
-      await readAll();
+      await ensureExists();
       await backend.mutate(name, change);
     },
   };

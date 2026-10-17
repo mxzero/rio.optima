@@ -11,6 +11,10 @@
 //   - The TV is switched off, crashes or loses its connection, so no beacon is
 //     sent: a playing page checks in every HEARTBEAT_SECONDS, and a slot that
 //     hasn't checked in for SLOT_EXPIRES_MS is free.
+// Check-ins are spaced out because each one that renews a slot rewrites the
+// screens collection (on Vercel Blob, an upload billed as an Advanced
+// Operation). A check-in or page render within RENEW_AFTER_MS of the last
+// renewal changes nothing, so it writes nothing.
 // Each page load has its own instance id, which the beacon carries, so the
 // beacon from a page being reloaded can't free the slot its replacement just
 // picked up.
@@ -25,11 +29,14 @@ import { openJson, sealJson } from "@/lib/server/session";
 import { collection } from "@/lib/server/store";
 import { findUserById } from "@/lib/server/users";
 
-export const HEARTBEAT_SECONDS = 15;
-// Three missed check-ins. Browsers slow timers in hidden tabs, so a player
-// left in a background tab can lose its slot; it takes it back (if still free)
-// when shown again.
-const SLOT_EXPIRES_MS = 45_000;
+export const HEARTBEAT_SECONDS = 60;
+// Two and a half check-ins, so one late or missed check-in doesn't lose the
+// slot. Browsers slow timers in hidden tabs (to once a minute), so a player
+// left in a background tab can still lose its slot; it takes it back (if still
+// free) when shown again.
+const SLOT_EXPIRES_MS = 150_000;
+// Shorter than HEARTBEAT_SECONDS, so every timed check-in renews the slot.
+const RENEW_AFTER_MS = 45_000;
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 type Screen = {
@@ -56,7 +63,7 @@ export class ScreenBusyError extends Error {
 }
 
 const plural = (count: number) => `${count} TV${count === 1 ? "" : "s"}`;
-const FREES_UP = `Closing the player on that screen frees it right away; a TV that was switched off or lost its connection frees up within ${SLOT_EXPIRES_MS / 1000} seconds.`;
+const FREES_UP = `Closing the player on that screen frees it right away; a TV that was switched off or lost its connection frees up within ${SLOT_EXPIRES_MS / 60_000} minutes.`;
 
 // Claims a slot for this account's TV, or renews the one given (with the page
 // load checking in, if any). Throws ScreenBusyError when the TV number is
@@ -99,6 +106,9 @@ export async function claimScreen(owner: SessionUser, tv: number, slotId?: strin
           );
       return;
     }
+    // Renewed moments ago by this page load (or a render of it): leave as is.
+    const sameLoad = !instance || instance === mine?.instance;
+    if (mine?.tv === tv && sameLoad && now - mine.lastSeen < RENEW_AFTER_MS) return;
     records[id] = {
       id,
       userId: owner.id,
