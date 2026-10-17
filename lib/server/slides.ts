@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { SessionUser, canUseSlider, isAdmin, parsePlayerKey } from "@/lib/auth";
+import { SessionUser, TvChoice, canUseSlider, isAdmin, parsePlayerKey } from "@/lib/auth";
 import {
   DirectUpload,
   MediaError,
@@ -14,29 +14,64 @@ import { collection } from "@/lib/server/store";
 import { findUserById, findUserByShortId, findUserByTvCode, listUsers } from "@/lib/server/users";
 import { MediaType, Slide, demoSlides, uploadedMediaId, uploadedMediaRef, youtubeIdFromUrl } from "@/lib/slider";
 
-type StoredSlide = Slide & { createdAt: string; media?: MediaLocation };
+// Slides saved before ordering existed have no `order` (they play after the
+// ordered ones, newest first) and no `tvNumber` (every TV).
+type StoredSlide = Omit<Slide, "order" | "tvNumber" | "ownerName" | "ownerTvs"> & {
+  order?: number;
+  tvNumber?: number | null;
+  createdAt: string;
+  media?: MediaLocation;
+};
 
 const slides = collection<StoredSlide>("slides", async () => {
   const admin = (await listUsers()).find((user) => user.role === "admin");
   const now = Date.now();
-  // Stagger timestamps so the demo slides keep their order.
   return demoSlides.map((slide, index) => ({
     ...slide,
+    order: index + 1,
+    tvNumber: null,
     ownerId: admin?.id ?? "",
     createdAt: new Date(now - index * 1000).toISOString(),
   }));
 });
 
-const newestFirst = (a: StoredSlide, b: StoredSlide) => b.createdAt.localeCompare(a.createdAt);
+function playOrder(a: StoredSlide, b: StoredSlide) {
+  const byOrder = (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER);
+  return byOrder || b.createdAt.localeCompare(a.createdAt);
+}
+
+// One owner's slides in play order.
+function playlistOf(all: Iterable<StoredSlide>, ownerId: string) {
+  return [...all].filter((slide) => slide.ownerId === ownerId).sort(playOrder);
+}
+
+// Saves a playlist's positions as 1, 2, 3… so gaps and unordered slides settle.
+function renumber(records: Record<string, StoredSlide>, playlist: StoredSlide[]) {
+  playlist.forEach((slide, index) => {
+    records[slide.id] = { ...records[slide.id], order: index + 1 };
+  });
+}
 
 function visibleTo(user: SessionUser, slide: StoredSlide) {
   return isAdmin(user) || slide.ownerId === user.id;
 }
 
 async function withOwnerNames(list: StoredSlide[]): Promise<Slide[]> {
-  const names = new Map((await listUsers()).map((user) => [user.id, user.name]));
+  const owners = new Map((await listUsers()).map((user) => [user.id, user]));
+  const all = await slides.list();
+  const positions = new Map<string, number>();
+  for (const ownerId of new Set(list.map((slide) => slide.ownerId))) {
+    playlistOf(all, ownerId).forEach((slide, index) => positions.set(slide.id, index + 1));
+  }
   return list.map((stored) => {
-    const slide: Slide & Partial<StoredSlide> = { ...stored, ownerName: names.get(stored.ownerId) ?? "Removed user" };
+    const owner = owners.get(stored.ownerId);
+    const slide: Slide & Partial<Pick<StoredSlide, "createdAt" | "media">> = {
+      ...stored,
+      order: positions.get(stored.id) ?? stored.order ?? 1,
+      tvNumber: stored.tvNumber ?? null,
+      ownerName: owner?.name ?? "Removed user",
+      ownerTvs: owner?.totalTvs ?? 1,
+    };
     delete slide.createdAt;
     delete slide.media;
     return slide;
@@ -63,9 +98,26 @@ export async function findPlayerOwner(key: string) {
   return canUseSlider(user) ? user : null;
 }
 
-// Admins see every slide; everyone else only their own.
+// Admins see every slide (their own first, then by owner); everyone else only
+// their own. Each owner's slides are in play order.
 export async function listSlidesFor(user: SessionUser) {
-  return withOwnerNames((await slides.list()).filter((slide) => visibleTo(user, slide)).sort(newestFirst));
+  const list = await withOwnerNames((await slides.list()).filter((slide) => visibleTo(user, slide)));
+  return list.sort(
+    (a, b) =>
+      Number(a.ownerId !== user.id) - Number(b.ownerId !== user.id) ||
+      (a.ownerName ?? "").localeCompare(b.ownerName ?? "") ||
+      a.ownerId.localeCompare(b.ownerId) ||
+      a.order - b.order,
+  );
+}
+
+// What one of the owner's TVs plays: their own slides in order. A numbered TV
+// plays the slides set to its number plus the ones set to All.
+export async function listTvPlaylist(owner: SessionUser, tv: TvChoice) {
+  const playlist = playlistOf(await slides.list(), owner.id).filter(
+    (slide) => tv === "all" || slide.tvNumber == null || slide.tvNumber === tv,
+  );
+  return withOwnerNames(playlist);
 }
 
 export async function getSlideFor(user: SessionUser, id: string) {
@@ -163,6 +215,7 @@ async function resolveSource(
 
 // ---- Create / update / delete ----
 
+// New slides go to the end of the playlist and play on every TV.
 export async function createSlide(user: SessionUser, raw: unknown, direct: DirectUpload | null) {
   const checked = checkFields(raw);
   const source = await resolveSource(user, checked, direct);
@@ -171,11 +224,16 @@ export async function createSlide(user: SessionUser, raw: unknown, direct: Direc
     id: crypto.randomUUID(),
     src: source.src,
     media: source.media,
+    tvNumber: null,
     ownerId: user.id,
     createdAt: new Date().toISOString(),
   };
   try {
-    await slides.put(slide);
+    await slides.update((records) => {
+      const playlist = playlistOf(Object.values(records), user.id);
+      renumber(records, playlist);
+      records[slide.id] = { ...slide, order: playlist.length + 1 };
+    });
   } catch (error) {
     if (source.media) await deleteMedia(source.media);
     throw error;
@@ -196,6 +254,42 @@ export async function updateSlide(user: SessionUser, id: string, raw: unknown, d
   }
   if (current.media && current.src !== updated.src) await deleteMedia(current.media);
   return (await withOwnerNames([updated]))[0];
+}
+
+// Moves a slide within its owner's playlist and/or sets which TV plays it, from
+// the dropdowns in the media table.
+export async function placeSlide(user: SessionUser, id: string, raw: unknown) {
+  const current = await findVisible(user, id);
+  const input = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+
+  let tvNumber: number | null | undefined;
+  if (input.tvNumber !== undefined) {
+    const ownerTvs = (await findUserById(current.ownerId))?.totalTvs ?? 1;
+    tvNumber = input.tvNumber === null || input.tvNumber === "all" ? null : Number(input.tvNumber);
+    if (tvNumber !== null && (!Number.isInteger(tvNumber) || tvNumber < 1 || tvNumber > ownerTvs)) {
+      throw new MediaError(`Choose All or a TV from 1 to ${ownerTvs}.`);
+    }
+  }
+  let order: number | undefined;
+  if (input.order !== undefined) {
+    order = Number(input.order);
+    if (!Number.isInteger(order) || order < 1) throw new MediaError("Choose a position in the playlist.");
+  }
+
+  await slides.update((records) => {
+    if (!records[id]) return;
+    if (tvNumber !== undefined) records[id] = { ...records[id], tvNumber };
+    const playlist = playlistOf(Object.values(records), current.ownerId);
+    if (order !== undefined) {
+      const [moving] = playlist.splice(
+        playlist.findIndex((slide) => slide.id === id),
+        1,
+      );
+      playlist.splice(Math.min(order, playlist.length + 1) - 1, 0, moving);
+    }
+    renumber(records, playlist);
+  });
+  return getSlideFor(user, id);
 }
 
 export async function deleteSlide(user: SessionUser, id: string) {

@@ -7,19 +7,23 @@ import {
   SHORT_ID_ALPHABET,
   SHORT_ID_PREFIX,
   Service,
+  MAX_TVS,
   SessionUser,
   TV_CODE_LETTERS,
+  isValidTvCode,
 } from "@/lib/auth";
 import { collection } from "@/lib/server/store";
 
 const scrypt = promisify(crypto.scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
 // Records saved before these fields existed have no `active` (they count as
-// active) and no `shortId` or `tvCode` (assigned on first load).
-type UserRecord = Omit<SessionUser, "active" | "shortId" | "tvCode"> & {
+// active), no `totalTvs` (1), and no `shortId` or `tvCode` (assigned on first
+// load, as is a new TV code for one without a digit).
+type UserRecord = Omit<SessionUser, "active" | "shortId" | "tvCode" | "totalTvs"> & {
   active?: boolean;
   shortId?: string;
   tvCode?: string;
+  totalTvs?: number;
   passwordHash: string;
   createdAt: string;
 };
@@ -35,12 +39,12 @@ function newShortId(taken: Set<string>) {
   }
 }
 
-// 24 × 32 × 32 = 24,576 codes in all.
+// 24 × (32 × 32 − 24 × 24) = 10,752 codes in all.
 function newTvCode(taken: Set<string>) {
   for (;;) {
     let code = TV_CODE_LETTERS[crypto.randomInt(TV_CODE_LETTERS.length)];
     for (let i = 0; i < 2; i++) code += SHORT_ID_ALPHABET[crypto.randomInt(SHORT_ID_ALPHABET.length)];
-    if (!taken.has(code)) {
+    if (isValidTvCode(code) && !taken.has(code)) {
       taken.add(code);
       return code;
     }
@@ -49,6 +53,8 @@ function newTvCode(taken: Set<string>) {
 
 const takenIds = (all: UserRecord[], field: "shortId" | "tvCode") =>
   new Set(all.map((user) => user[field]).filter((id): id is string => Boolean(id)));
+
+const needsBackfill = (user: UserRecord) => !user.shortId || !isValidTvCode(user.tvCode);
 
 // First run: keep the original built-in admin so existing logins still work.
 const SEED_ADMIN = { name: "Admin", email: "admin@rio.optima", password: "Pass123!" };
@@ -59,6 +65,7 @@ async function seedUsers(): Promise<UserRecord[]> {
       id: crypto.randomUUID(),
       shortId: newShortId(new Set()),
       tvCode: newTvCode(new Set()),
+      totalTvs: 1,
       name: SEED_ADMIN.name,
       email: SEED_ADMIN.email,
       role: "admin",
@@ -71,22 +78,22 @@ async function seedUsers(): Promise<UserRecord[]> {
 }
 
 const users = collection<UserRecord>("users", seedUsers);
-// Gives any user without a short id or TV code one, once per process.
+// Gives any user without a short id or valid TV code one, once per process.
 let backfill: Promise<void> | null = null;
 
 async function loadAll() {
   const all = await users.list();
-  if (all.every((user) => user.shortId && user.tvCode)) return all;
+  if (!all.some(needsBackfill)) return all;
   backfill ??= (async () => {
     const current = await users.list();
     const shortIds = takenIds(current, "shortId");
     const tvCodes = takenIds(current, "tvCode");
     for (const user of current) {
-      if (user.shortId && user.tvCode) continue;
+      if (!needsBackfill(user)) continue;
       await users.put({
         ...user,
         shortId: user.shortId || newShortId(shortIds),
-        tvCode: user.tvCode || newTvCode(tvCodes),
+        tvCode: isValidTvCode(user.tvCode) ? user.tvCode : newTvCode(tvCodes),
       });
     }
   })().finally(() => {
@@ -110,8 +117,18 @@ async function passwordMatches(password: string, stored: string) {
   return crypto.timingSafeEqual(actual, expected);
 }
 
-function toPublic({ id, shortId, tvCode, name, email, role, service, active }: UserRecord): SessionUser {
-  return { id, shortId: shortId ?? "", tvCode: tvCode ?? "", name, email, role, service, active: active !== false };
+function toPublic({ id, shortId, tvCode, totalTvs, name, email, role, service, active }: UserRecord): SessionUser {
+  return {
+    id,
+    shortId: shortId ?? "",
+    tvCode: tvCode ?? "",
+    totalTvs: totalTvs ?? 1,
+    name,
+    email,
+    role,
+    service,
+    active: active !== false,
+  };
 }
 
 function activeAdminCount(all: UserRecord[]) {
@@ -141,6 +158,14 @@ export async function findUserByTvCode(tvCode: string) {
   return user ? toPublic(user) : null;
 }
 
+// For a TV signing in at /sfs/<code>: the account is known, only the password
+// is typed.
+export async function verifyPasswordFor(id: string, password: string) {
+  const user = (await loadAll()).find((item) => item.id === id);
+  const ok = await passwordMatches(password, user?.passwordHash ?? "scrypt$00$00");
+  return user && ok ? toPublic(user) : null;
+}
+
 export async function verifyLogin(email: string, password: string) {
   const user = (await loadAll()).find((item) => item.email === normalizeEmail(email));
   // Hash anyway on unknown emails so response time doesn't reveal which exist.
@@ -157,9 +182,18 @@ export type UserInput = {
   role?: unknown;
   service?: unknown;
   active?: unknown;
+  totalTvs?: unknown;
 };
 
-type Checked = { name?: string; email?: string; password?: string; role?: Role; service?: Service; active?: boolean };
+type Checked = {
+  name?: string;
+  email?: string;
+  password?: string;
+  role?: Role;
+  service?: Service;
+  active?: boolean;
+  totalTvs?: number;
+};
 
 function checkInput(input: UserInput, creating: boolean): Checked | string {
   const out: Checked = {};
@@ -190,6 +224,13 @@ function checkInput(input: UserInput, creating: boolean): Checked | string {
     if (typeof input.active !== "boolean") return "Choose whether the account is active.";
     out.active = input.active;
   }
+  if (creating || input.totalTvs !== undefined) {
+    const totalTvs = input.totalTvs === undefined ? 1 : Number(input.totalTvs);
+    if (!Number.isInteger(totalTvs) || totalTvs < 1 || totalTvs > MAX_TVS) {
+      return `Total TV must be a whole number from 1 to ${MAX_TVS}.`;
+    }
+    out.totalTvs = totalTvs;
+  }
   return out;
 }
 
@@ -204,6 +245,7 @@ export async function createUser(input: UserInput) {
     id: crypto.randomUUID(),
     shortId: newShortId(takenIds(all, "shortId")),
     tvCode: newTvCode(takenIds(all, "tvCode")),
+    totalTvs: checked.totalTvs ?? 1,
     name: checked.name!,
     email: checked.email!,
     role: checked.role!,

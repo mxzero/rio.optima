@@ -1,6 +1,13 @@
 // Shared between server and browser code. Nothing secret lives here.
 
 export const SESSION_COOKIE = "rio_session";
+// Set on a TV after it signs in at /sfs/<code>; holds its screen slot.
+export const SCREEN_COOKIE = "rio_screen";
+
+export const MAX_TVS = 100;
+
+// What a TV plays: everything, or one TV number's media.
+export type TvChoice = number | "all";
 
 export const ROLES = [
   { value: "admin", label: "Admin" },
@@ -21,6 +28,8 @@ export type SessionUser = {
   shortId: string;
   // 3-character TV code like K7M, used in short player links (/sfs/K7M).
   tvCode: string;
+  // How many screens may play this account's media at the same time.
+  totalTvs: number;
   name: string;
   email: string;
   role: Role;
@@ -44,9 +53,24 @@ export const SHORT_ID_PREFIX = "RIO-";
 const SHORT_ID_AT_END = /(RIO-[A-Z0-9]{5})$/i;
 const UUID_AT_END = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
-// TV codes: a letter, then 2 more characters, from the same alphabet.
+// TV codes: a letter, then 2 more characters from the same alphabet, at least
+// one of them a digit (K7M, R2D).
 export const TV_CODE_LETTERS = SHORT_ID_ALPHABET.replace(/[0-9]/g, "");
 const TV_CODE = /^[A-Z][A-Z0-9]{2}$/i;
+
+export function isValidTvCode(code: string | undefined): code is string {
+  return Boolean(code && TV_CODE.test(code) && /[0-9]/.test(code));
+}
+
+export function tvLabel(tv: TvChoice) {
+  return tv === "all" ? "All TVs" : `TV ${tv}`;
+}
+
+export function parseTvChoice(value: unknown): TvChoice | null {
+  if (value === "all") return "all";
+  const tv = Number(value);
+  return Number.isInteger(tv) && tv >= 1 && tv <= MAX_TVS ? tv : null;
+}
 
 // Which user a player key points at: a TV code (/sfs/K7M), or an older
 // /slider/fullscreen link ending in a short id (sam-sub-RIO-7K2QX) or, from

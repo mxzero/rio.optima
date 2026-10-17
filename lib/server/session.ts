@@ -50,6 +50,26 @@ async function readSessionToken(token: string | undefined) {
   return userId;
 }
 
+// Signs JSON for other cookies as "<base64url json>.<signature>". The
+// "<purpose>:" prefix keeps one kind of token from passing as another.
+export async function sealJson(purpose: string, data: unknown) {
+  const payload = Buffer.from(JSON.stringify(data)).toString("base64url");
+  return `${payload}.${await sign(`${purpose}:${payload}`)}`;
+}
+
+export async function openJson<T>(purpose: string, token: string | undefined): Promise<T | null> {
+  const [payload, signature, extra] = token?.split(".") ?? [];
+  if (!payload || !signature || extra !== undefined) return null;
+  const expected = Buffer.from(await sign(`${purpose}:${payload}`));
+  const given = Buffer.from(signature);
+  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return null;
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString()) as T;
+  } catch {
+    return null;
+  }
+}
+
 // The signed-in user, re-read from storage so role changes and deletions
 // apply immediately.
 export async function getSessionUser(): Promise<SessionUser | null> {

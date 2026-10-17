@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { SessionUser, canUseSlider, playerPath } from "@/lib/auth";
 
-// The signed-in user's public player URL, with a copy button.
+// The signed-in user's TV player URL, with a copy button.
 export default function PlayerLink() {
   const [url, setUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -37,7 +37,7 @@ export default function PlayerLink() {
 
   return (
     <div className="mt-3 max-w-3xl">
-      <p className="text-xs font-semibold text-muted">Player link: plays your active media on any screen, no login needed</p>
+      <p className="text-xs font-semibold text-muted">TV player link: open it on a TV, pick a TV number and enter your password</p>
       <div className="mt-1.5 flex items-stretch overflow-hidden rounded-[5px] border border-navy/20 bg-white">
         <a
           href={url}

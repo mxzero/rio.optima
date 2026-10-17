@@ -2,51 +2,66 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Player, { PlayerSlide } from "@/components/slider/Player";
+import { TvChoice, tvLabel } from "@/lib/auth";
 import { Slide, activePlayerSlides } from "@/lib/slider";
 import { fetchSlides } from "@/lib/sliderApi";
 
 const REFRESH_MS = 5 * 60 * 1000;
+const CONTROLS_MS = 3000;
 const noop = () => () => {};
 
 type Props =
   // Signed-in player: loads the viewer's playlist from the API.
-  | { publicKey?: never; slides?: never }
-  // Public link: slides come from the server; uploaded files are fetched with
-  // the link's key instead of a login.
-  | { publicKey: string; slides: Slide[] };
+  | { screen?: never; slides?: never }
+  // A TV signed in at /sfs/<code>: slides come from the server, and uploaded
+  // files load with the TV's cookie.
+  | { screen: { tv: TvChoice; heartbeatSeconds: number }; slides: Slide[] };
 
-export default function FullscreenView({ publicKey, slides: given }: Props) {
+export default function FullscreenView({ screen, slides: given }: Props) {
   const router = useRouter();
   const [fetched, setFetched] = useState<Slide[]>([]);
   // Schedules depend on the screen's local date, so only filter in the browser.
   const isClient = useSyncExternalStore(noop, () => true, () => false);
+  const heartbeatSeconds = screen?.heartbeatSeconds;
 
   useEffect(() => {
-    if (publicKey) {
-      // Pick up playlist edits, and redirect away if the account is deactivated.
-      const timer = window.setInterval(() => router.refresh(), REFRESH_MS);
-      return () => window.clearInterval(timer);
+    if (!heartbeatSeconds) {
+      fetchSlides()
+        .then(setFetched)
+        .catch(() => setFetched([]));
+      return;
     }
-    fetchSlides()
-      .then(setFetched)
-      .catch(() => setFetched([]));
-  }, [publicKey, router]);
+    // Pick up playlist edits, and go back to sign-in if the account is
+    // deactivated.
+    const refresh = window.setInterval(() => router.refresh(), REFRESH_MS);
+    // Keep this TV's slot. If it was lost (say another screen took the TV
+    // number while this one was offline), re-render to show the sign-in and
+    // why. Network errors are ignored: the next check-in tries again.
+    const heartbeat = window.setInterval(() => {
+      fetch("/api/sfs/heartbeat", { method: "POST" })
+        .then((response) => {
+          if (!response.ok && response.status < 500) router.refresh();
+        })
+        .catch(() => {});
+    }, heartbeatSeconds * 1000);
+    return () => {
+      window.clearInterval(refresh);
+      window.clearInterval(heartbeat);
+    };
+  }, [heartbeatSeconds, router]);
 
-  const slides = useMemo<PlayerSlide[]>(() => {
-    if (!isClient) return [];
-    const playable = activePlayerSlides(given ?? fetched);
-    if (!publicKey) return playable;
-    const param = `player=${encodeURIComponent(publicKey)}`;
-    return playable.map((slide) =>
-      slide.src?.startsWith("/api/slider/media/") ? { ...slide, src: `${slide.src}?${param}` } : slide,
-    );
-  }, [isClient, given, fetched, publicKey]);
+  const slides = useMemo<PlayerSlide[]>(
+    () => (isClient ? activePlayerSlides(given ?? fetched) : []),
+    [isClient, given, fetched],
+  );
 
   return (
     <div className="fixed inset-0 z-[80] bg-black">
-      {publicKey ? null : (
+      {screen ? (
+        <TvControls tv={screen.tv} />
+      ) : (
         <>
           <Link
             href="/slider"
@@ -64,6 +79,52 @@ export default function FullscreenView({ publicKey, slides: given }: Props) {
         </>
       )}
       {isClient ? <Player slides={slides} fill className="h-full" /> : null}
+    </div>
+  );
+}
+
+// Hidden while playing; moving the mouse (or a TV remote's pointer) shows which
+// TV this is and a button to free its slot and sign in again.
+function TvControls({ tv }: { tv: TvChoice }) {
+  const router = useRouter();
+  const [visible, setVisible] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const hideTimer = useRef(0);
+
+  useEffect(() => {
+    function show() {
+      setVisible(true);
+      window.clearTimeout(hideTimer.current);
+      hideTimer.current = window.setTimeout(() => setVisible(false), CONTROLS_MS);
+    }
+    window.addEventListener("pointermove", show);
+    window.addEventListener("keydown", show);
+    return () => {
+      window.removeEventListener("pointermove", show);
+      window.removeEventListener("keydown", show);
+      window.clearTimeout(hideTimer.current);
+    };
+  }, []);
+
+  async function switchTv() {
+    setLeaving(true);
+    await fetch("/api/sfs/logout", { method: "POST" }).catch(() => {});
+    router.refresh();
+  }
+
+  return (
+    <div
+      className={`absolute top-2.5 left-2.5 z-20 flex items-center gap-2 transition-opacity ${visible || leaving ? "opacity-100" : "pointer-events-none opacity-0"}`}
+    >
+      <span className="rounded-[5px] bg-navy/80 px-2.5 py-1.5 text-xs font-bold text-white">{tvLabel(tv)}</span>
+      <button
+        type="button"
+        onClick={switchTv}
+        disabled={leaving}
+        className="rounded-[5px] bg-gold px-2.5 py-1.5 text-xs font-bold text-navy disabled:opacity-60"
+      >
+        {leaving ? "Signing out…" : "Switch TV"}
+      </button>
     </div>
   );
 }

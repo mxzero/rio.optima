@@ -15,8 +15,14 @@ export type Slide = {
   // "media:<id>" for files uploaded to the server; otherwise a URL.
   src: string;
   isActive: boolean;
+  // Position in the owner's playlist, from 1.
+  order: number;
+  // Which of the owner's TVs plays it; null plays it on every TV.
+  tvNumber: number | null;
   ownerId: string;
   ownerName?: string;
+  // The owner's Total TV, for the TV number choices.
+  ownerTvs?: number;
 };
 
 // The editable fields a client sends when creating or updating a slide.
@@ -39,7 +45,7 @@ export function uploadedMediaRef(id: string) {
   return MEDIA_PREFIX + id;
 }
 
-export const demoSlides: Omit<Slide, "ownerId">[] = [
+export const demoSlides: Omit<Slide, "ownerId" | "order" | "tvNumber">[] = [
   {
     id: "demo-1",
     name: "Lobby welcome",

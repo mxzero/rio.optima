@@ -1,25 +1,19 @@
 import { Readable } from "node:stream";
 import { errorResponse } from "@/lib/server/http";
 import { NextResponse } from "next/server";
-import { SessionUser } from "@/lib/auth";
-import { requireUser } from "@/lib/server/session";
-import { findPlayerOwner, openMediaFor } from "@/lib/server/slides";
+import { canUseSlider } from "@/lib/auth";
+import { screenOwner } from "@/lib/server/screens";
+import { getSessionUser } from "@/lib/server/session";
+import { openMediaFor } from "@/lib/server/slides";
 
 // Sends an uploaded file the viewer may see: a redirect to a short-lived signed
 // Blob URL, or a local file stream with Range support so videos can seek.
-// Public player links pass ?player=<key> instead of a login; the file must be
-// in that (active) user's playlist.
+// Viewers are signed-in users, or TVs signed in at /sfs/<code> (the file must
+// be in that account's playlist).
 export async function GET(request: Request, ctx: RouteContext<"/api/slider/media/[id]">) {
-  const key = new URL(request.url).searchParams.get("player");
-  let viewer: SessionUser | null;
-  if (key) {
-    viewer = await findPlayerOwner(key);
-    if (!viewer) return NextResponse.json({ error: "Media not found." }, { status: 404 });
-  } else {
-    const { user, denied } = await requireUser("slider");
-    if (denied) return denied;
-    viewer = user;
-  }
+  const user = await getSessionUser();
+  const viewer = canUseSlider(user) ? user : await screenOwner();
+  if (!viewer) return NextResponse.json({ error: "Please log in." }, { status: 401 });
   try {
     const media = await openMediaFor(viewer, (await ctx.params).id);
     if ("redirect" in media) {

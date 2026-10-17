@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { AdminUserRow, ROLES, Role, SERVICES, Service, SessionUser, roleLabel, serviceLabel } from "@/lib/auth";
+import { AdminUserRow, MAX_TVS, ROLES, Role, SERVICES, Service, SessionUser, roleLabel, serviceLabel } from "@/lib/auth";
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -82,7 +82,7 @@ export default function AdminPage() {
       <div>
         <h2 className="font-display text-xl font-bold text-navy">Users</h2>
         <div className="mt-3 overflow-x-auto border border-navy/10 bg-white">
-          <table className="w-full min-w-[1040px] text-left text-sm">
+          <table className="w-full min-w-[1120px] text-left text-sm">
             <thead className="bg-navy text-white">
               <tr>
                 <th className="px-3 py-3 font-semibold">Name</th>
@@ -92,6 +92,7 @@ export default function AdminPage() {
                 <th className="px-3 py-3 font-semibold">Role</th>
                 <th className="px-3 py-3 font-semibold">Service</th>
                 <th className="px-3 py-3 font-semibold">Active</th>
+                <th className="px-3 py-3 font-semibold">Total TV</th>
                 <th className="px-3 py-3 font-semibold">Media</th>
                 <th className="px-3 py-3 font-semibold">Added</th>
                 <th className="px-3 py-3 font-semibold">Actions</th>
@@ -100,7 +101,7 @@ export default function AdminPage() {
             <tbody>
               {users === null ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-8 text-center text-muted">
+                  <td colSpan={11} className="px-3 py-8 text-center text-muted">
                     Loading…
                   </td>
                 </tr>
@@ -144,6 +145,7 @@ function AddUserForm({ onAdded, onError }: { onAdded: (user: SessionUser) => voi
           role: form.get("role"),
           service: form.get("service"),
           active: form.get("active") === "yes",
+          totalTvs: Number(form.get("totalTvs")),
         }),
       );
       formElement.reset();
@@ -199,6 +201,11 @@ function AddUserForm({ onAdded, onError }: { onAdded: (user: SessionUser) => voi
             <option value="no">No</option>
           </select>
         </label>
+        <label className="grid gap-1.5 text-sm font-semibold text-navy">
+          Total TV *
+          <input name="totalTvs" type="number" required min={1} max={MAX_TVS} defaultValue={1} className={inputClass} />
+          <span className="text-xs font-normal text-muted">How many TVs can play this user&apos;s media at once.</span>
+        </label>
         <div className="flex self-end md:col-span-2">
           <button
             type="submit"
@@ -210,7 +217,7 @@ function AddUserForm({ onAdded, onError }: { onAdded: (user: SessionUser) => voi
         </div>
       </div>
       <p className="text-xs text-muted">
-        <strong className="text-navy">Active: No</strong> blocks login and the user&apos;s public player link.{" "}
+        <strong className="text-navy">Active: No</strong> blocks login and the user&apos;s TV player link.{" "}
         <strong className="text-navy">Admin</strong>: admin console, manages users, sees all uploaded media.{" "}
         <strong className="text-navy">Subscriber</strong>: manages only their own media.
       </p>
@@ -234,7 +241,7 @@ function UserRow({
   const [password, setPassword] = useState("");
 
   async function patch(
-    body: Partial<{ role: Role; service: Service; password: string; active: boolean }>,
+    body: Partial<{ role: Role; service: Service; password: string; active: boolean; totalTvs: number }>,
     message: string,
   ) {
     setBusy(true);
@@ -328,6 +335,31 @@ function UserRow({
           <option value="yes">Yes</option>
           <option value="no">No</option>
         </select>
+      </td>
+      <td className="px-3 py-3">
+        <input
+          key={user.totalTvs}
+          type="number"
+          aria-label={`Total TV for ${user.name}`}
+          min={1}
+          max={MAX_TVS}
+          defaultValue={user.totalTvs}
+          disabled={busy}
+          onBlur={(event) => {
+            const totalTvs = Number(event.target.value);
+            if (totalTvs === user.totalTvs) return;
+            if (!event.target.checkValidity()) {
+              event.target.value = String(user.totalTvs);
+              onError(`Total TV must be a whole number from 1 to ${MAX_TVS}.`);
+              return;
+            }
+            patch({ totalTvs }, `${user.name} can now play on ${totalTvs} TV${totalTvs === 1 ? "" : "s"}.`);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          className="w-20 rounded-[5px] border border-navy/20 px-2 py-1"
+        />
       </td>
       <td className="px-3 py-3">{user.mediaCount}</td>
       <td className="px-3 py-3 text-muted">{new Date(user.createdAt).toLocaleDateString()}</td>

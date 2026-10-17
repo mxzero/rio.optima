@@ -8,7 +8,7 @@ import SliderOverview from "@/components/slider/SliderOverview";
 import AccessNotice from "@/components/AccessNotice";
 import { SessionUser, canUseSlider } from "@/lib/auth";
 
-// Shown when a public player link belongs to a missing or deactivated account.
+// Shown when a TV player link belongs to a missing or deactivated account.
 function AccountNotice() {
   const params = useSearchParams();
   if (params.get("account") !== "inactive") return null;

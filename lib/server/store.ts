@@ -8,6 +8,7 @@
 // - JSON files under .data/ (or RIO_DATA_DIR), for localhost or any server
 //   with a writable disk.
 
+import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { Redis } from "@upstash/redis";
@@ -41,6 +42,8 @@ type Backend = {
   create<T>(name: string, records: Records<T>): Promise<void>;
   set<T>(name: string, id: string, record: T): Promise<void>;
   remove(name: string, id: string): Promise<void>;
+  // Read-modify-write of the whole collection, with no other write in between.
+  mutate<T>(name: string, change: (records: Records<T>) => void): Promise<void>;
 };
 
 // ---- Redis ----
@@ -60,6 +63,28 @@ const redisBackend = (client: Redis): Backend => ({
   },
   async remove(name, id) {
     await client.hdel(`rio:${name}`, id);
+  },
+  // Upstash's REST API has no WATCH, so hold a short lock key instead.
+  async mutate<T>(name: string, change: (records: Records<T>) => void) {
+    const lock = `rio:lock:${name}`;
+    const owner = crypto.randomUUID();
+    for (let attempt = 0; !(await client.set(lock, owner, { nx: true, px: 5000 })); attempt++) {
+      if (attempt >= 50) throw new Error(`Timed out waiting to update ${name}.`);
+      await new Promise((resolve) => setTimeout(resolve, 40 + Math.random() * 40));
+    }
+    try {
+      const before = (await client.hgetall<Records<T>>(`rio:${name}`)) ?? {};
+      const records: Records<T> = structuredClone(before);
+      change(records);
+      const changed = Object.fromEntries(
+        Object.entries(records).filter(([id, record]) => JSON.stringify(record) !== JSON.stringify(before[id])),
+      );
+      const removed = Object.keys(before).filter((id) => !(id in records));
+      if (Object.keys(changed).length) await client.hset(`rio:${name}`, changed);
+      if (removed.length) await client.hdel(`rio:${name}`, ...removed);
+    } finally {
+      if ((await client.get(lock)) === owner) await client.del(lock);
+    }
   },
 });
 
@@ -134,6 +159,7 @@ const blobBackend: Backend = {
       delete records[id];
     });
   },
+  mutate: updateBlob,
 };
 
 // ---- Local files ----
@@ -198,6 +224,12 @@ const fileBackend: Backend = {
       delete records[id];
       await writeFileRecords(name, records);
     }),
+  mutate: <T>(name: string, change: (records: Records<T>) => void) =>
+    withLock(async () => {
+      const records = (await readFileRecords<T>(name)) ?? {};
+      change(records);
+      await writeFileRecords(name, records);
+    }),
 };
 
 const backend: Backend = redis ? redisBackend(redis) : blobToken ? blobBackend : fileBackend;
@@ -209,6 +241,9 @@ export type Collection<T extends { id: string }> = {
   get(id: string): Promise<T | null>;
   put(record: T): Promise<void>;
   remove(id: string): Promise<void>;
+  // Changes several records at once, keyed by id. `change` may run more than
+  // once (Blob retries on conflict), so it must only touch `records`.
+  update(change: (records: Records<T>) => void): Promise<void>;
 };
 
 // A named set of records, seeded the first time it's read while missing.
@@ -231,6 +266,10 @@ export function collection<T extends { id: string }>(name: string, seed: () => P
     async remove(id) {
       await readAll();
       await backend.remove(name, id);
+    },
+    async update(change) {
+      await readAll();
+      await backend.mutate(name, change);
     },
   };
 }
