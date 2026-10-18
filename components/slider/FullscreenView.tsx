@@ -8,7 +8,7 @@ import { tvLabel } from "@/lib/auth";
 import { Slide, activePlayerSlides } from "@/lib/slider";
 import { fetchSlides } from "@/lib/sliderApi";
 
-const REFRESH_MS = 5 * 60 * 1000;
+const REFRESH_MS = 60 * 60 * 1000;
 const CONTROLS_MS = 3000;
 const noop = () => () => {};
 
@@ -42,8 +42,8 @@ export default function FullscreenView({ screen, slides: given }: Props) {
         .catch(() => setFetched([]));
       return;
     }
-    // Pick up playlist edits, and go back to sign-in if the account is
-    // deactivated.
+    // Pick up playlist edits once an hour. (A deactivated account or lost slot
+    // shows up sooner, at the next check-in.)
     const refresh = window.setInterval(() => router.refresh(), REFRESH_MS);
     // Keep this TV's slot. If it was lost (say another screen took the TV
     // number while this one was offline), re-render to show the sign-in and
@@ -103,13 +103,13 @@ export default function FullscreenView({ screen, slides: given }: Props) {
             href="/slider"
             title="Back to SLIDER"
             aria-label="Back to SLIDER"
-            className="absolute top-2.5 left-2.5 z-20 grid h-[30px] w-[30px] place-items-center rounded-[5px] bg-gold text-navy"
+            className="absolute top-2 left-2 z-20 grid h-[22px] w-[22px] place-items-center rounded-[4px] bg-gold/50 text-navy"
           >
-            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="h-[13px] w-[13px]" aria-hidden="true">
               <path fill="currentColor" d="M12 3.2 3 12h2.5v8h5v-5h3v5h5v-8H21z" />
             </svg>
           </Link>
-          <p className="absolute top-3.5 left-12 z-20 m-0 text-xs text-white [text-shadow:0_1px_4px_#000]">
+          <p className="absolute top-2.5 left-9 z-20 m-0 text-[10px] text-white [text-shadow:0_1px_4px_#000]">
             toggle F11 (fullscreen)
           </p>
         </>
@@ -120,7 +120,8 @@ export default function FullscreenView({ screen, slides: given }: Props) {
 }
 
 // Hidden while playing; moving the mouse (or a TV remote's pointer) shows which
-// TV this is and a button to free its slot and sign in again.
+// TV this is and an OFF button, which frees its TV number for another screen
+// and goes back to the sign-in (TV 1, no password).
 function TvControls({ tv }: { tv: number }) {
   const router = useRouter();
   const [visible, setVisible] = useState(false);
@@ -142,7 +143,7 @@ function TvControls({ tv }: { tv: number }) {
     };
   }, []);
 
-  async function switchTv() {
+  async function turnOff() {
     setLeaving(true);
     await fetch("/api/sfs/logout", { method: "POST" }).catch(() => {});
     router.refresh();
@@ -150,16 +151,19 @@ function TvControls({ tv }: { tv: number }) {
 
   return (
     <div
-      className={`absolute top-2.5 left-2.5 z-20 flex items-center gap-2 transition-opacity ${visible || leaving ? "opacity-100" : "pointer-events-none opacity-0"}`}
+      className={`absolute top-2 left-2 z-20 flex items-center gap-1.5 transition-opacity ${visible || leaving ? "opacity-100" : "pointer-events-none opacity-0"}`}
     >
-      <span className="rounded-[5px] bg-navy/80 px-2.5 py-1.5 text-xs font-bold text-white">{tvLabel(tv)}</span>
+      <span className="rounded-[4px] bg-navy/50 px-1.5 py-0.5 text-[10px] font-bold text-white">{tvLabel(tv)}</span>
       <button
         type="button"
-        onClick={switchTv}
+        onClick={turnOff}
         disabled={leaving}
-        className="rounded-[5px] bg-gold px-2.5 py-1.5 text-xs font-bold text-navy disabled:opacity-60"
+        title="Turn off this TV and free its number"
+        className="flex rounded-[4px] bg-gold/50 px-1.5 py-0.5 font-bold text-navy disabled:opacity-60"
       >
-        {leaving ? "Signing out…" : "Switch TV"}
+        {/* Sized on a span: the global button rule (font: inherit) outranks
+            text utilities on the button itself. */}
+        <span className="text-[10px]">{leaving ? "Turning off…" : "OFF"}</span>
       </button>
     </div>
   );

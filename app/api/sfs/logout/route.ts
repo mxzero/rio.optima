@@ -3,7 +3,7 @@ import { SCREEN_COOKIE } from "@/lib/auth";
 import { errorResponse } from "@/lib/server/http";
 import { readScreenPass, releaseScreen } from "@/lib/server/screens";
 
-// "Switch TV" on a playing TV: frees its slot right away and signs it out.
+// OFF on a playing TV: frees its slot right away and signs it out.
 export async function POST() {
   try {
     const pass = await readScreenPass();
